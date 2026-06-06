@@ -12,9 +12,8 @@ obj/
 *.db-wal
 
 ## User secrets / sensitive config
-appsettings.Development.json
-**/appsettings.*.json
-!**/appsettings.json
+**/appsettings*.json
+!**/appsettings.example.json
 
 ## Publish output
 publish/
