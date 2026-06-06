@@ -3,7 +3,7 @@ services:
     name: reparto-alfajores
     runtime: docker
     dockerfilePath: ./RepartoAlfajores/Dockerfile
-    dockerContext: ./RepartoAlfajores
+    dockerContext: .
     plan: free
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
