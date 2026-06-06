@@ -20,7 +20,9 @@ if (!string.IsNullOrEmpty(databaseUrl))
         .Replace("postgres://", "https://");
     var uri = new Uri(normalizedUrl);
     var userInfo = uri.UserInfo.Split(':', 2);
-    var port = uri.Port == -1 ? 5432 : uri.Port;
+    // OJO: al normalizar a https://, un puerto omitido se reporta como 443 (default https),
+    // no como -1. IsDefaultPort detecta que la URL original no traía puerto -> usar 5432.
+    var port = uri.IsDefaultPort ? 5432 : uri.Port;
     var database = uri.AbsolutePath.TrimStart('/');
     var connStr = $"Host={uri.Host};Port={port};Database={database};" +
                   $"Username={Uri.UnescapeDataString(userInfo[0])};Password={Uri.UnescapeDataString(userInfo[1])};" +
