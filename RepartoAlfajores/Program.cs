@@ -10,15 +10,30 @@ AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 var builder = WebApplication.CreateBuilder(args);
 
 // Soporta DATABASE_URL en formato postgres:// o postgresql:// (Neon/Render)
-// Npgsql 8.x acepta URIs directamente sin necesidad de parsear manualmente
+// Npgsql requiere connection string key-value, asi que se parsea la URI.
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 if (!string.IsNullOrEmpty(databaseUrl))
 {
-    builder.Configuration["ConnectionStrings:DefaultConnection"] = databaseUrl;
+    // .NET Uri no reconoce el scheme postgresql://, se normaliza para poder parsear
+    var normalizedUrl = databaseUrl
+        .Replace("postgresql://", "https://")
+        .Replace("postgres://", "https://");
+    var uri = new Uri(normalizedUrl);
+    var userInfo = uri.UserInfo.Split(':', 2);
+    var port = uri.Port == -1 ? 5432 : uri.Port;
+    var database = uri.AbsolutePath.TrimStart('/');
+    var connStr = $"Host={uri.Host};Port={port};Database={database};" +
+                  $"Username={Uri.UnescapeDataString(userInfo[0])};Password={Uri.UnescapeDataString(userInfo[1])};" +
+                  $"SSL Mode=Require;Trust Server Certificate=true";
+    builder.Configuration["ConnectionStrings:DefaultConnection"] = connStr;
 }
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"),
+        npgsql => npgsql.EnableRetryOnFailure(
+            maxRetryCount: 5,
+            maxRetryDelay: TimeSpan.FromSeconds(10),
+            errorCodesToAdd: null)));
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
@@ -51,8 +66,22 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await db.Database.MigrateAsync();
-    await Seeder.SeedAsync(db);
+    // Neon (Postgres serverless) suspende el compute tras inactividad; al despertar
+    // las primeras conexiones pueden fallar. Reintentamos hasta que responda.
+    for (var intento = 1; ; intento++)
+    {
+        try
+        {
+            await db.Database.MigrateAsync();
+            await Seeder.SeedAsync(db);
+            break;
+        }
+        catch (Exception ex) when (intento < 6)
+        {
+            Console.WriteLine($"[startup] Intento {intento} de conectar a la base falló: {ex.Message}. Reintentando en 5s...");
+            await Task.Delay(5000);
+        }
+    }
 }
 
 app.Use(async (context, next) =>
