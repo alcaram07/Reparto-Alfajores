@@ -1,0 +1,82 @@
+@{
+    ViewData["Title"] = "Configuración";
+    var zonas = ViewBag.Zonas as IEnumerable<Zona> ?? new List<Zona>();
+    var categorias = ViewBag.Categorias as IEnumerable<CategoriaProducto> ?? new List<CategoriaProducto>();
+}
+
+<div class="page-header">
+    <h1><i class="bi bi-gear me-2" style="color:var(--color-primary)"></i>Configuración</h1>
+</div>
+
+<div class="row g-4">
+    <!-- Zonas -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-pin-map me-1"></i> Zonas de reparto</div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    @foreach (var z in zonas)
+                    {
+                        <li class="list-group-item d-flex justify-content-between align-items-center" style="font-size:0.9rem">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="fw-semibold @(!z.Activa ? "text-muted" : "")">@z.Nombre</span>
+                                @if (!z.Activa)
+                                {<span class="badge-danger">Inactiva</span>}
+                            </div>
+                            <div class="d-flex gap-1">
+                                <form asp-action="ToggleZona" asp-route-id="@z.Id" method="post">
+                                    <button type="submit" class="btn btn-sm @(z.Activa ? "btn-outline-warning" : "btn-outline-success") py-0 px-2">
+                                        @(z.Activa ? "Desactivar" : "Activar")
+                                    </button>
+                                </form>
+                            </div>
+                        </li>
+                    }
+                </ul>
+            </div>
+            <div class="card-footer">
+                <form asp-action="NuevaZona" method="post" class="d-flex gap-2">
+                    @Html.AntiForgeryToken()
+                    <input name="Nombre" class="form-control form-control-sm" placeholder="Nombre de la nueva zona" required />
+                    <button type="submit" class="btn btn-sm btn-primary">
+                        <i class="bi bi-plus"></i> Agregar
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Categorías -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-tags me-1"></i> Categorías de productos</div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    @foreach (var c in categorias)
+                    {
+                        <li class="list-group-item d-flex justify-content-between align-items-center" style="font-size:0.9rem">
+                            <span class="fw-semibold">@c.Nombre</span>
+                            <form asp-action="EditarCategoria" method="post" class="d-flex gap-1">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="Id" value="@c.Id" />
+                                <input name="Nombre" class="form-control form-control-sm" style="max-width:140px" value="@c.Nombre" required />
+                                <button type="submit" class="btn btn-sm btn-outline-secondary py-0 px-2">
+                                    <i class="bi bi-check"></i>
+                                </button>
+                            </form>
+                        </li>
+                    }
+                </ul>
+            </div>
+            <div class="card-footer">
+                <form asp-action="NuevaCategoria" method="post" class="d-flex gap-2">
+                    @Html.AntiForgeryToken()
+                    <input name="Nombre" class="form-control form-control-sm" placeholder="Nueva categoría" required />
+                    <button type="submit" class="btn btn-sm btn-primary">
+                        <i class="bi bi-plus"></i> Agregar
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

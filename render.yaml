@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: reparto-alfajores
+    runtime: docker
+    dockerfilePath: ./RepartoAlfajores/Dockerfile
+    dockerContext: ./RepartoAlfajores
+    plan: free
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: reparto-db
+          property: connectionString
+      - key: Auth__PasswordHash
+        sync: false        # setear manualmente en el dashboard de Render
+      - key: NombreNegocio
+        sync: false        # setear manualmente (ej: "Mi Reparto de Dulces")
+
+databases:
+  - name: reparto-db
+    plan: free
+    databaseName: reparto_alfajores
+    user: reparto_user

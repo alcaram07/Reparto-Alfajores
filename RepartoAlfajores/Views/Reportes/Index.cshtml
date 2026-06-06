@@ -1,0 +1,194 @@
+@model ReporteViewModel
+@{
+    ViewData["Title"] = "Reportes";
+    string Fmt(decimal v) => v.ToString("N2", new System.Globalization.CultureInfo("es-AR"));
+}
+
+<div class="page-header">
+    <h1><i class="bi bi-bar-chart me-2" style="color:var(--color-primary)"></i>Reportes</h1>
+</div>
+
+<!-- Tabs de período -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+            <a asp-action="Index" asp-route-tab="hoy"
+               class="btn btn-sm @(Model.Tab == "hoy" ? "btn-primary" : "btn-outline-secondary")">Hoy</a>
+            <a asp-action="Index" asp-route-tab="semana"
+               class="btn btn-sm @(Model.Tab == "semana" ? "btn-primary" : "btn-outline-secondary")">Esta semana</a>
+            <a asp-action="Index" asp-route-tab="mes"
+               class="btn btn-sm @(Model.Tab == "mes" ? "btn-primary" : "btn-outline-secondary")">Este mes</a>
+            <form method="get" class="d-flex gap-2 align-items-center">
+                <input type="hidden" name="tab" value="custom" />
+                <input type="date" name="desde" class="form-control form-control-sm" value="@Model.Desde.ToString("yyyy-MM-dd")" />
+                <span class="text-muted">—</span>
+                <input type="date" name="hasta" class="form-control form-control-sm" value="@Model.Hasta.ToString("yyyy-MM-dd")" />
+                <button type="submit" class="btn btn-sm btn-outline-primary">Aplicar</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Métricas -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="metric-card">
+            <div class="metric-label">Total vendido</div>
+            <div class="metric-value" style="color:var(--color-primary)">$@Fmt(Model.TotalVendido)</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="metric-card">
+            <div class="metric-label">Cantidad de ventas</div>
+            <div class="metric-value">@Model.CantidadVentas</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="metric-card">
+            <div class="metric-label">Ticket promedio</div>
+            <div class="metric-value">$@Fmt(Model.TicketPromedio)</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="metric-card">
+            <div class="metric-label">Pendiente de cobro</div>
+            <div class="metric-value" style="color:var(--color-danger)">$@Fmt(Model.TotalPendiente)</div>
+        </div>
+    </div>
+</div>
+
+@if (Model.CantidadVentas == 0)
+{
+    <div class="text-center text-muted py-5">
+        <i class="bi bi-bar-chart" style="font-size:3rem;opacity:0.15"></i>
+        <p class="mt-3">Sin datos para el período seleccionado</p>
+    </div>
+}
+else
+{
+    <div class="row g-3">
+        <!-- Ventas por día -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">Ventas por día</div>
+                <div class="card-body">
+                    <canvas id="lineChart" height="100"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ventas por zona -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">Por zona</div>
+                <div class="card-body">
+                    <canvas id="pieChart" height="200"></canvas>
+                    <ul class="list-unstyled mt-3" style="font-size:0.85rem">
+                        @foreach (var z in Model.VentasPorZona)
+                        {
+                            <li class="d-flex justify-content-between">
+                                <span>@z.Nombre (@z.Cantidad)</span>
+                                <strong>$@Fmt(z.Total)</strong>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top productos -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">Productos más vendidos</div>
+                <div class="card-body" style="font-size:0.87rem">
+                    @{
+                        var maxQty = Model.TopProductos.Any() ? Model.TopProductos.Max(p => p.TotalCantidad) : 1;
+                    }
+                    @foreach (var p in Model.TopProductos)
+                    {
+                        var pct = maxQty > 0 ? (p.TotalCantidad * 100 / maxQty) : 0;
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>@p.Nombre</span>
+                                <small class="text-muted">@p.TotalCantidad unid. · $@Fmt(p.TotalMonto)</small>
+                            </div>
+                            <div class="progress" style="height:6px">
+                                <div class="progress-bar" style="width:@pct%; background:var(--color-primary)"></div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Top clientes -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">Mejores clientes</div>
+                <div class="card-body p-0">
+                    <table class="table table-hover mb-0" style="font-size:0.87rem">
+                        <thead>
+                            <tr><th>Cliente</th><th class="text-center">Ventas</th><th class="text-end">Total</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var c in Model.TopClientes)
+                            {
+                                <tr>
+                                    <td>@c.Nombre</td>
+                                    <td class="text-center">@c.TotalVentas</td>
+                                    <td class="text-end fw-semibold">$@Fmt(c.TotalMonto)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+@if (Model.CantidadVentas > 0)
+{
+<script>
+const ventasDia = @Html.Raw(Model.VentasDiaJson);
+const ventasZona = @Html.Raw(Model.VentasZonaJson);
+
+new Chart(document.getElementById('lineChart'), {
+    type: 'line',
+    data: {
+        labels: ventasDia.map(v => v.fecha),
+        datasets: [{
+            label: 'Ventas ($)',
+            data: ventasDia.map(v => v.total),
+            borderColor: '#BA7517',
+            backgroundColor: 'rgba(186,117,23,0.08)',
+            tension: 0.3,
+            fill: true
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+    }
+});
+
+const zoneColors = ['#BA7517','#3B6D11','#A32D2D','#0C447C','#3C3489','#633806'];
+new Chart(document.getElementById('pieChart'), {
+    type: 'doughnut',
+    data: {
+        labels: ventasZona.map(z => z.zona),
+        datasets: [{
+            data: ventasZona.map(z => z.total),
+            backgroundColor: zoneColors.slice(0, ventasZona.length)
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom' } }
+    }
+});
+</script>
+}
+}

@@ -1,0 +1,166 @@
+@model DashboardViewModel
+@{
+    ViewData["Title"] = "Dashboard";
+    string Fmt(decimal v) => v.ToString("N2", new System.Globalization.CultureInfo("es-AR"));
+    string Iniciales(string nombre) {
+        var p = nombre.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return p.Length >= 2 ? $"{p[0][0]}{p[1][0]}".ToUpper() : nombre.Substring(0, Math.Min(2, nombre.Length)).ToUpper();
+    }
+    string ResumenProductos(IEnumerable<DetalleVenta> detalles) =>
+        string.Join(" · ", detalles.Select(d => $"{d.Cantidad}× {d.Producto?.Nombre}"));
+}
+
+<div class="page-header d-flex justify-content-between align-items-center">
+    <h1><i class="bi bi-house me-2" style="color:var(--color-primary)"></i>Dashboard</h1>
+    <span class="text-muted" style="font-size:0.85rem">@DateTime.Now.ToString("dddd d 'de' MMMM", new System.Globalization.CultureInfo("es-AR"))</span>
+</div>
+
+<!-- Métricas -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="metric-card">
+            <i class="bi bi-cash metric-icon" style="color:var(--color-primary)"></i>
+            <div class="metric-label">Vendido hoy</div>
+            <div class="metric-value" style="color:var(--color-primary)">$@Fmt(Model.TotalVendidoHoy)</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="metric-card">
+            <i class="bi bi-cart3 metric-icon"></i>
+            <div class="metric-label">Ventas hoy</div>
+            <div class="metric-value">@Model.CantidadVentasHoy</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="metric-card">
+            <i class="bi bi-exclamation-circle metric-icon" style="color:var(--color-danger)"></i>
+            <div class="metric-label">Por cobrar</div>
+            <div class="metric-value" style="color:var(--color-danger)">$@Fmt(Model.TotalPorCobrar)</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="metric-card">
+            <i class="bi bi-check-circle metric-icon" style="color:var(--color-success)"></i>
+            <div class="metric-label">Cobrado hoy</div>
+            <div class="metric-value" style="color:var(--color-success)">$@Fmt(Model.TotalCobradoHoy)</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <!-- Ventas de hoy -->
+    <div class="col-md-7">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-list-ul me-1"></i> Ventas de hoy</span>
+                <a asp-controller="Ventas" asp-action="Index" class="btn btn-sm btn-outline-secondary">Ver todas</a>
+            </div>
+            <div class="card-body p-0">
+                @if (!Model.VentasHoy.Any())
+                {
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-inbox" style="font-size:2rem;opacity:0.3"></i>
+                        <p class="mt-2 mb-0">Sin ventas hoy</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0" style="font-size:0.88rem">
+                            <thead>
+                                <tr>
+                                    <th>Cliente</th>
+                                    <th>Productos</th>
+                                    <th>Total</th>
+                                    <th>Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var v in Model.VentasHoy)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="avatar-initials">@Iniciales(v.Cliente?.Nombre ?? "?")</div>
+                                                <span>@v.Cliente?.Nombre</span>
+                                            </div>
+                                        </td>
+                                        <td class="text-muted" style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">
+                                            @ResumenProductos(v.Detalles)
+                                        </td>
+                                        <td><strong>$@Fmt(v.Total)</strong></td>
+                                        <td>
+                                            @if (v.EstadoCobro == EstadoCobro.Cobrado)
+                                            {
+                                                <span class="badge-ok">Cobrado</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge-danger">Cta. Cte.</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Panel derecho -->
+    <div class="col-md-5 d-flex flex-column gap-3">
+        <!-- Deudores -->
+        <div class="card">
+            <div class="card-header"><i class="bi bi-people me-1"></i> Top deudores</div>
+            <div class="card-body p-0">
+                @if (!Model.TopDeudores.Any())
+                {
+                    <div class="text-center text-muted py-3" style="font-size:0.85rem">Sin deudores</div>
+                }
+                else
+                {
+                    <ul class="list-group list-group-flush">
+                        @foreach (var d in Model.TopDeudores)
+                        {
+                            var badgeCls = d.DiasDeuda < 7 ? "badge-ok" : d.DiasDeuda <= 20 ? "badge-warn" : "badge-danger";
+                            <li class="list-group-item d-flex justify-content-between align-items-center" style="font-size:0.87rem">
+                                <div>
+                                    <div class="fw-semibold">@d.Nombre</div>
+                                    <small class="text-muted">@d.Zona · <span class="@badgeCls">@d.DiasDeuda días</span></small>
+                                </div>
+                                <div class="text-end">
+                                    <div class="fw-bold" style="color:var(--color-danger)">$@Fmt(d.Saldo)</div>
+                                    <a asp-controller="Cobros" asp-action="Index" asp-route-clienteId="@d.ClienteId"
+                                       class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.75rem">Cobrar</a>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+
+        <!-- Acceso rápido -->
+        <div class="card">
+            <div class="card-header"><i class="bi bi-lightning me-1"></i> Acceso rápido</div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a asp-controller="Ventas" asp-action="Nuevo" class="btn btn-primary">
+                        <i class="bi bi-plus-circle me-1"></i> Nueva venta
+                    </a>
+                    <a asp-controller="Cobros" asp-action="Index" class="btn btn-outline-secondary">
+                        <i class="bi bi-cash-coin me-1"></i> Registrar cobro
+                    </a>
+                    <a asp-controller="Clientes" asp-action="Nuevo" class="btn btn-outline-secondary">
+                        <i class="bi bi-person-plus me-1"></i> Nuevo cliente
+                    </a>
+                    <a asp-controller="Reportes" asp-action="Index" class="btn btn-outline-secondary">
+                        <i class="bi bi-bar-chart me-1"></i> Ver reportes
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

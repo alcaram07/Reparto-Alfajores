@@ -1,0 +1,26 @@
+## .NET / ASP.NET Core
+*.user
+*.suo
+.vs/
+bin/
+obj/
+*.log
+
+## EF Core migrations lock
+*.db
+*.db-shm
+*.db-wal
+
+## User secrets / sensitive config
+appsettings.Development.json
+**/appsettings.*.json
+!**/appsettings.json
+
+## Publish output
+publish/
+out/
+
+## OS
+.DS_Store
+Thumbs.db
+desktop.ini

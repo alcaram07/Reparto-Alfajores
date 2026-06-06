@@ -1,0 +1,18 @@
+@{
+    ViewData["Title"] = "Error";
+}
+
+<div class="page-header">
+    <h1><i class="bi bi-exclamation-triangle text-danger me-2"></i>Ocurrió un error</h1>
+</div>
+
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-exclamation-circle text-danger" style="font-size: 3rem;"></i>
+        <h4 class="mt-3">Algo salió mal</h4>
+        <p class="text-muted">Ocurrió un error al procesar la solicitud. Por favor intentá de nuevo.</p>
+        <a asp-controller="Home" asp-action="Index" class="btn btn-primary">
+            <i class="bi bi-house me-1"></i> Volver al inicio
+        </a>
+    </div>
+</div>

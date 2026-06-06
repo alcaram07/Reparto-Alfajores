@@ -1,0 +1,92 @@
+@model Venta
+@{
+    ViewData["Title"] = $"Venta #{Model.Id}";
+    string Fmt(decimal v) => v.ToString("N2", new System.Globalization.CultureInfo("es-AR"));
+}
+
+<div class="page-header d-flex justify-content-between align-items-center">
+    <h1><i class="bi bi-receipt me-2" style="color:var(--color-primary)"></i>Venta #@Model.Id</h1>
+    <div class="d-flex gap-2">
+        <button onclick="window.print()" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-printer me-1"></i> Imprimir
+        </button>
+        <a asp-action="Index" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i> Volver
+        </a>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-6" id="printArea">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-3">
+                    <div>
+                        <div class="fw-bold fs-5">@Model.Cliente?.Nombre</div>
+                        <small class="text-muted">@Model.Cliente?.Zona?.Nombre · @Model.Cliente?.Direccion</small>
+                    </div>
+                    <div class="text-end">
+                        <div class="text-muted" style="font-size:0.85rem">@Model.Fecha.ToString("dd/MM/yyyy HH:mm")</div>
+                        @if (Model.EstadoCobro == EstadoCobro.Cobrado)
+                        {<span class="badge-ok">Cobrado</span>}
+                        else
+                        {<span class="badge-danger">Cuenta corriente</span>}
+                    </div>
+                </div>
+
+                <hr />
+
+                <table class="table mb-0" style="font-size:0.9rem">
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th class="text-center">Cant.</th>
+                            <th class="text-end">Precio</th>
+                            <th class="text-end">Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var d in Model.Detalles)
+                        {
+                            <tr>
+                                <td>@d.Producto?.Nombre</td>
+                                <td class="text-center">@d.Cantidad</td>
+                                <td class="text-end">$@Fmt(d.PrecioUnitario)</td>
+                                <td class="text-end fw-semibold">$@Fmt(d.Subtotal)</td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot class="table-light">
+                        <tr>
+                            <td colspan="3" class="text-end fw-bold">Total</td>
+                            <td class="text-end fw-bold fs-5" style="color:var(--color-primary)">$@Fmt(Model.Total)</td>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                <hr />
+                <div class="row" style="font-size:0.87rem">
+                    <div class="col-6">
+                        <span class="text-muted">Método de pago:</span><br />
+                        <strong>@Model.MetodoPago</strong>
+                    </div>
+                    @if (!string.IsNullOrEmpty(Model.Nota))
+                    {
+                        <div class="col-6">
+                            <span class="text-muted">Nota:</span><br />
+                            <span>@Model.Nota</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<style media="print">
+    .sidebar, .bottom-nav, .page-header .btn, .btn { display: none !important; }
+    .main-content { margin-left: 0 !important; padding: 0 !important; }
+    .page-header h1 { font-size: 1.1rem; }
+</style>
+}

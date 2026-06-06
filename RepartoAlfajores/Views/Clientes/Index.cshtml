@@ -1,0 +1,120 @@
+@model IEnumerable<Cliente>
+@{
+    ViewData["Title"] = "Clientes";
+string Iniciales(string nombre) {
+        var p = nombre.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return p.Length >= 2 ? $"{p[0][0]}{p[1][0]}".ToUpper() : nombre.Substring(0, Math.Min(2, nombre.Length)).ToUpper();
+    }
+    string ZonaBadge(string zona) => zona?.ToLower() switch {
+        "norte" => "badge-zona-norte",
+        "centro" => "badge-zona-centro",
+        "sur" => "badge-zona-sur",
+        "oeste" => "badge-zona-oeste",
+        _ => "badge-ok"
+    };
+    var zonas = ViewBag.Zonas as IEnumerable<Zona> ?? new List<Zona>();
+}
+
+<div class="page-header d-flex justify-content-between align-items-center">
+    <h1><i class="bi bi-people me-2" style="color:var(--color-primary)"></i>Clientes</h1>
+    <a asp-action="Nuevo" class="btn btn-primary"><i class="bi bi-person-plus me-1"></i> Nuevo cliente</a>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <input type="text" name="busqueda" class="form-control form-control-sm" placeholder="Buscar por nombre o teléfono..." value="@ViewBag.Busqueda" />
+            </div>
+            <div class="col-md-3">
+                <select name="zonaId" class="form-select form-select-sm">
+                    <option value="">Todas las zonas</option>
+                    @foreach (var z in zonas)
+                    {
+                        <option value="@z.Id" selected="@(ViewBag.ZonaId?.ToString() == z.Id.ToString())">@z.Nombre</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select name="estadoDeuda" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    <option value="sinDeuda" selected="@(ViewBag.EstadoDeuda == "sinDeuda")">Sin deuda</option>
+                    <option value="conDeuda" selected="@(ViewBag.EstadoDeuda == "conDeuda")">Con deuda</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-sm btn-primary w-100">Filtrar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        @if (!Model.Any())
+        {
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-people" style="font-size:2.5rem;opacity:0.2"></i>
+                <p class="mt-2">No se encontraron clientes</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover mb-0" style="font-size:0.88rem">
+                    <thead>
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Zona</th>
+                            <th>Dirección</th>
+                            <th>Saldo</th>
+                            <th>Estado</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in Model)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="avatar-initials" style="@(!c.Activo ? "opacity:0.5" : "")">@Iniciales(c.Nombre)</div>
+                                        <div>
+                                            <div class="fw-semibold @(!c.Activo ? "text-muted" : "")">@c.Nombre</div>
+                                            @if (!string.IsNullOrEmpty(c.Telefono))
+                                            {
+                                                <small class="text-muted">@c.Telefono</small>
+                                            }
+                                        </div>
+                                    </div>
+                                </td>
+                                <td><span class="@ZonaBadge(c.Zona?.Nombre ?? "")">@c.Zona?.Nombre</span></td>
+                                <td class="text-muted">@c.Direccion</td>
+                                <td id="saldo-@c.Id" class="fw-semibold">—</td>
+                                <td>
+                                    @if (c.Activo)
+                                    {
+                                        <span class="badge-ok">Activo</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge-danger">Inactivo</span>
+                                    }
+                                </td>
+                                <td>
+                                    <a asp-action="Detalle" asp-route-id="@c.Id" class="btn btn-sm btn-outline-secondary">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <a asp-action="Editar" asp-route-id="@c.Id" class="btn btn-sm btn-outline-secondary">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>

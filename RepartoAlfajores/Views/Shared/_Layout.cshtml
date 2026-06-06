@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@(ViewData["Title"] != null ? ViewData["Title"] + " - " : "")@(ViewBag.NombreNegocio ?? "Reparto de Dulces")</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+@{
+    var controller = ViewContext.RouteData.Values["controller"]?.ToString();
+    var nombreNegocio = ViewBag.NombreNegocio ?? "Reparto de Dulces";
+}
+
+<div class="app-container">
+    <!-- Sidebar Desktop -->
+    <nav class="sidebar d-none d-md-flex flex-column">
+        <div class="sidebar-brand">
+            <h5>🥐 @nombreNegocio</h5>
+            <small>Reparto de dulces</small>
+        </div>
+        <div class="sidebar-nav flex-column">
+            <a asp-controller="Home" asp-action="Index"
+               class="nav-link @(controller == "Home" ? "active" : "")">
+                <i class="bi bi-house"></i> Inicio
+            </a>
+            <a asp-controller="Ventas" asp-action="Index"
+               class="nav-link @(controller == "Ventas" ? "active" : "")">
+                <i class="bi bi-cart3"></i> Ventas
+            </a>
+            <a asp-controller="Clientes" asp-action="Index"
+               class="nav-link @(controller == "Clientes" ? "active" : "")">
+                <i class="bi bi-people"></i> Clientes
+            </a>
+            <a asp-controller="Productos" asp-action="Index"
+               class="nav-link @(controller == "Productos" ? "active" : "")">
+                <i class="bi bi-box-seam"></i> Productos
+            </a>
+            <a asp-controller="Cobros" asp-action="Index"
+               class="nav-link @(controller == "Cobros" ? "active" : "")">
+                <i class="bi bi-cash-coin"></i> Cobros
+            </a>
+            <a asp-controller="Reportes" asp-action="Index"
+               class="nav-link @(controller == "Reportes" ? "active" : "")">
+                <i class="bi bi-bar-chart"></i> Reportes
+            </a>
+        </div>
+        <div class="sidebar-footer">
+            <a asp-controller="Configuracion" asp-action="Index"
+               class="nav-link @(controller == "Configuracion" ? "active" : "")">
+                <i class="bi bi-gear"></i> Configuración
+            </a>
+            <form asp-controller="Auth" asp-action="Logout" method="post">
+                <button type="submit" class="nav-link w-100 border-0 bg-transparent text-start" style="cursor:pointer">
+                    <i class="bi bi-box-arrow-right"></i> Cerrar sesión
+                </button>
+            </form>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        @if (TempData["Success"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show mb-3" role="alert">
+                <i class="bi bi-check-circle me-1"></i> @TempData["Success"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        }
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show mb-3" role="alert">
+                <i class="bi bi-exclamation-circle me-1"></i> @TempData["Error"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        }
+        @RenderBody()
+    </main>
+</div>
+
+<!-- Bottom Nav Mobile -->
+<nav class="bottom-nav d-flex d-md-none">
+    <a asp-controller="Home" asp-action="Index" class="@(controller == "Home" ? "active" : "")">
+        <i class="bi bi-house"></i><span>Inicio</span>
+    </a>
+    <a asp-controller="Ventas" asp-action="Index" class="@(controller == "Ventas" ? "active" : "")">
+        <i class="bi bi-cart3"></i><span>Ventas</span>
+    </a>
+    <a asp-controller="Clientes" asp-action="Index" class="@(controller == "Clientes" ? "active" : "")">
+        <i class="bi bi-people"></i><span>Clientes</span>
+    </a>
+    <a asp-controller="Cobros" asp-action="Index" class="@(controller == "Cobros" ? "active" : "")">
+        <i class="bi bi-cash-coin"></i><span>Cobros</span>
+    </a>
+    <a asp-controller="Reportes" asp-action="Index" class="@(controller == "Reportes" ? "active" : "")">
+        <i class="bi bi-bar-chart"></i><span>Reportes</span>
+    </a>
+</nav>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
