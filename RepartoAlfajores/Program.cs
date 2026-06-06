@@ -10,19 +10,11 @@ AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 var builder = WebApplication.CreateBuilder(args);
 
 // Soporta DATABASE_URL en formato postgres:// o postgresql:// (Neon/Render)
+// Npgsql 8.x acepta URIs directamente sin necesidad de parsear manualmente
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 if (!string.IsNullOrEmpty(databaseUrl))
 {
-    // .NET Uri no reconoce el scheme postgresql://, se normaliza a https:// para parsear
-    var normalizedUrl = databaseUrl
-        .Replace("postgresql://", "https://")
-        .Replace("postgres://", "https://");
-    var uri = new Uri(normalizedUrl);
-    var userInfo = uri.UserInfo.Split(':', 2);
-    var port = uri.Port == -1 ? 5432 : uri.Port;
-    var database = uri.AbsolutePath.TrimStart('/').Split('?')[0];
-    var connStr = $"Host={uri.Host};Port={port};Database={database};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
-    builder.Configuration["ConnectionStrings:DefaultConnection"] = connStr;
+    builder.Configuration["ConnectionStrings:DefaultConnection"] = databaseUrl;
 }
 
 builder.Services.AddDbContext<AppDbContext>(options =>
