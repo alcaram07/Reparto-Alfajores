@@ -14,14 +14,16 @@ public class VentasController : Controller
     private readonly IClienteService _clienteService;
     private readonly IProductoService _productoService;
     private readonly IZonaService _zonaService;
+    private readonly IVentaVozService _ventaVozService;
 
     public VentasController(IVentaService ventaService, IClienteService clienteService,
-        IProductoService productoService, IZonaService zonaService)
+        IProductoService productoService, IZonaService zonaService, IVentaVozService ventaVozService)
     {
         _ventaService = ventaService;
         _clienteService = clienteService;
         _productoService = productoService;
         _zonaService = zonaService;
+        _ventaVozService = ventaVozService;
     }
 
     public async Task<IActionResult> Index(string? busqueda, EstadoCobro? estado, int? zonaId, DateTime? fecha)
@@ -66,6 +68,22 @@ public class VentasController : Controller
         var venta = await _ventaService.CreateAsync(vm);
         TempData["Success"] = "Venta registrada correctamente";
         return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> InterpretarVoz(IFormFile? audio)
+    {
+        if (audio == null || audio.Length == 0)
+            return Json(new VozResultado { Error = "No se recibió audio." });
+
+        using var ms = new MemoryStream();
+        await audio.CopyToAsync(ms);
+        var base64 = Convert.ToBase64String(ms.ToArray());
+        var mime = string.IsNullOrEmpty(audio.ContentType) ? "audio/webm" : audio.ContentType;
+        var dataUri = $"data:{mime};base64,{base64}";
+
+        var resultado = await _ventaVozService.ProcesarAudioAsync(dataUri);
+        return Json(resultado);
     }
 
     public async Task<IActionResult> Detalle(int id)

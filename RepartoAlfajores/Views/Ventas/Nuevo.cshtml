@@ -24,6 +24,28 @@
                         <span asp-validation-for="ClienteId" class="text-danger" style="font-size:0.8rem"></span>
                     </div>
 
+                    <!-- Cargar por voz (IA) -->
+                    <div class="mb-4 p-3 rounded" style="background:var(--color-primary-light)">
+                        <h6 class="fw-bold mb-2" style="color:var(--color-primary-dark)">
+                            <i class="bi bi-magic me-1"></i>Cargar por voz
+                        </h6>
+                        <p class="mb-2" style="font-size:0.8rem;color:var(--color-primary-dark)">
+                            Tocá el micrófono y dictá el pedido. Ej: "tres alfajores de maicena y dos de chocolate".
+                        </p>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <button type="button" id="btnGrabar" onclick="toggleRecording()" class="btn btn-primary">
+                                <i class="bi bi-mic-fill me-1"></i><span id="btnGrabarText">Grabar pedido</span>
+                            </button>
+                            <span id="recordingStatus" class="fw-semibold text-danger d-none" style="font-size:0.85rem">
+                                <span class="recording-dot me-1">●</span>Grabando… tocá Detener al terminar
+                            </span>
+                            <span id="vozProcesando" class="text-muted d-none" style="font-size:0.85rem">
+                                <span class="spinner-border spinner-border-sm me-1"></span>Procesando audio…
+                            </span>
+                        </div>
+                        <div id="vozAviso" class="mt-2 d-none" style="font-size:0.8rem"></div>
+                    </div>
+
                     <!-- Paso 2: Productos -->
                     <div class="mb-4">
                         <h6 class="fw-bold mb-2" style="color:var(--color-primary)">2. Agregar productos</h6>
@@ -96,6 +118,11 @@
     </div>
 </div>
 
+<style>
+    .recording-dot { display:inline-block; animation: blink 1s step-start infinite; }
+    @@keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0;} }
+</style>
+
 @section Scripts {
 <script>
 const productPrices = @Html.Raw(Model.ProductosPreciosJson);
@@ -166,6 +193,109 @@ function renderItems() {
 function updateTotal() {
     const total = items.reduce((s, i) => s + i.qty * i.precio, 0);
     document.getElementById('totalDisplay').textContent = '$' + total.toLocaleString('es-AR', {minimumFractionDigits:2});
+}
+
+// ── Cargar por voz con IA ────────────────────────────────────────────────
+let mediaRecorder = null;
+let audioChunks = [];
+let isRecording = false;
+
+async function toggleRecording() {
+    if (!isRecording) await startRecording();
+    else stopRecording();
+}
+
+async function startRecording() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mimeType = ['audio/webm', 'audio/ogg', 'audio/mp4'].find(t => MediaRecorder.isTypeSupported(t)) ?? '';
+        mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+        audioChunks = [];
+        mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+        mediaRecorder.onstop = () => {
+            stream.getTracks().forEach(t => t.stop());
+            const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+            enviarAudio(blob);
+        };
+        mediaRecorder.start();
+        isRecording = true;
+        setGrabarUI(true);
+    } catch (err) {
+        mostrarAviso('danger', 'No se pudo acceder al micrófono: ' + err.message);
+    }
+}
+
+function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+    isRecording = false;
+    setGrabarUI(false);
+}
+
+function setGrabarUI(grabando) {
+    const btn = document.getElementById('btnGrabar');
+    const txt = document.getElementById('btnGrabarText');
+    const status = document.getElementById('recordingStatus');
+    if (grabando) {
+        txt.textContent = 'Detener grabación';
+        btn.classList.replace('btn-primary', 'btn-danger');
+        status.classList.remove('d-none');
+    } else {
+        txt.textContent = 'Grabar pedido';
+        btn.classList.replace('btn-danger', 'btn-primary');
+        status.classList.add('d-none');
+    }
+}
+
+function mostrarAviso(tipo, html) {
+    const div = document.getElementById('vozAviso');
+    div.className = 'mt-2 alert alert-' + tipo + ' py-2 mb-0';
+    div.style.fontSize = '0.8rem';
+    div.innerHTML = html;
+    div.classList.remove('d-none');
+}
+
+async function enviarAudio(blob) {
+    const proc = document.getElementById('vozProcesando');
+    const btn = document.getElementById('btnGrabar');
+    proc.classList.remove('d-none');
+    btn.disabled = true;
+    document.getElementById('vozAviso').classList.add('d-none');
+
+    try {
+        const ext = (blob.type.split('/')[1] || 'webm').split(';')[0];
+        const fd = new FormData();
+        fd.append('audio', blob, 'pedido.' + ext);
+        const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value;
+
+        const resp = await fetch('@Url.Action("InterpretarVoz", "Ventas")', {
+            method: 'POST',
+            headers: token ? { 'RequestVerificationToken': token } : {},
+            body: fd
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+
+        if (data.error) { mostrarAviso('warning', data.error); return; }
+
+        (data.items || []).forEach(it => {
+            const existing = items.findIndex(i => i.productId === it.productoId);
+            if (existing >= 0) items[existing].qty += it.cantidad;
+            else items.push({ productId: it.productoId, qty: it.cantidad, precio: it.precio, nombre: it.nombre });
+        });
+        renderItems();
+
+        let aviso = '<i class="bi bi-check-circle me-1"></i><strong>Reconocido:</strong> ' +
+                    (data.transcripcion || '');
+        if ((data.noEncontrados || []).length > 0)
+            aviso += '<br><i class="bi bi-exclamation-triangle me-1"></i>No encontrados en el catálogo: ' +
+                     data.noEncontrados.join(', ');
+        mostrarAviso((data.items || []).length > 0 ? 'success' : 'warning', aviso);
+    } catch (err) {
+        mostrarAviso('danger', 'Error procesando el audio: ' + err.message);
+    } finally {
+        proc.classList.add('d-none');
+        btn.disabled = false;
+    }
 }
 </script>
 }

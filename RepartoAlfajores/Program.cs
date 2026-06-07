@@ -62,6 +62,8 @@ builder.Services.AddScoped<IVentaService, VentaService>();
 builder.Services.AddScoped<ICobroService, CobroService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IReporteService, ReporteService>();
+builder.Services.AddHttpClient<IAIService, AIService>();
+builder.Services.AddScoped<IVentaVozService, VentaVozService>();
 
 var app = builder.Build();
 
