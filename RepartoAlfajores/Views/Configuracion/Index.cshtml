@@ -9,6 +9,39 @@
 </div>
 
 <div class="row g-4">
+    <!-- Inteligencia Artificial -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-magic me-1"></i> Inteligencia Artificial (carga de ventas por voz)</div>
+            <div class="card-body">
+                <p class="text-muted mb-3" style="font-size:0.85rem">
+                    Para usar la carga de ventas por voz necesitás una API key de Groq (gratis en
+                    <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com</a>).
+                </p>
+                @if (ViewBag.GroqKeyConfigurada == true)
+                {
+                    <div class="alert badge-ok d-inline-flex align-items-center gap-2 py-1 px-2 mb-3" style="font-size:0.85rem">
+                        <i class="bi bi-check-circle"></i> Configurada: <code>@ViewBag.GroqKeyMasked</code>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert badge-warn d-inline-flex align-items-center gap-2 py-1 px-2 mb-3" style="font-size:0.85rem">
+                        <i class="bi bi-exclamation-triangle"></i> Todavía no configurada
+                    </div>
+                }
+                <form asp-action="GuardarApiKey" method="post" class="d-flex gap-2 flex-wrap align-items-center">
+                    @Html.AntiForgeryToken()
+                    <input type="password" name="groqApiKey" class="form-control form-control-sm" style="max-width:340px"
+                           placeholder="gsk_..." autocomplete="off" required />
+                    <button type="submit" class="btn btn-sm btn-primary">
+                        <i class="bi bi-save me-1"></i> Guardar API key
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Zonas -->
     <div class="col-md-6">
         <div class="card">

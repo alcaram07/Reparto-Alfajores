@@ -10,6 +10,7 @@ public class AIService : IAIService
 {
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _configuration;
+    private readonly IConfiguracionService _configuracionService;
     private readonly ILogger<AIService> _logger;
 
     private const string GroqAudioUrl = "https://api.groq.com/openai/v1/audio/transcriptions";
@@ -17,17 +18,25 @@ public class AIService : IAIService
     private const string GroqAudioModel = "whisper-large-v3-turbo";
     private const string GroqChatModel  = "llama-3.3-70b-versatile";
 
-    public AIService(HttpClient httpClient, IConfiguration configuration, ILogger<AIService> logger)
+    public AIService(HttpClient httpClient, IConfiguration configuration,
+        IConfiguracionService configuracionService, ILogger<AIService> logger)
     {
         _httpClient = httpClient;
         _configuration = configuration;
+        _configuracionService = configuracionService;
         _logger = logger;
     }
 
-    private string GetGroqApiKey() =>
-        Environment.GetEnvironmentVariable("GROQ_API_KEY")
-        ?? _configuration["Groq:ApiKey"]
-        ?? "";
+    // Prioridad: clave guardada en la DB (pantalla de Configuración) → env var → appsettings.
+    private async Task<string> GetGroqApiKeyAsync()
+    {
+        var dbKey = await _configuracionService.GetValorAsync("GroqApiKey");
+        if (!string.IsNullOrWhiteSpace(dbKey)) return dbKey;
+
+        return Environment.GetEnvironmentVariable("GROQ_API_KEY")
+            ?? _configuration["Groq:ApiKey"]
+            ?? "";
+    }
 
     public async Task<string> TranscribeAudioAsync(string audioDataUri)
     {
@@ -69,6 +78,10 @@ public class AIService : IAIService
             _                           => "ogg"
         };
 
+        var apiKey = await GetGroqApiKeyAsync();
+        if (string.IsNullOrWhiteSpace(apiKey))
+            return "__transcription_error__: [NoApiKey] Falta configurar la API key de Groq en Configuración.";
+
         for (int attempt = 0; attempt <= 2; attempt++)
         {
             try
@@ -82,7 +95,7 @@ public class AIService : IAIService
                 form.Add(new StringContent(GroqAudioModel), "model");
 
                 var requestMsg = new HttpRequestMessage(HttpMethod.Post, GroqAudioUrl);
-                requestMsg.Headers.Authorization = new AuthenticationHeaderValue("Bearer", GetGroqApiKey());
+                requestMsg.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
                 requestMsg.Content = form;
 
                 var response = await _httpClient.SendAsync(requestMsg);
@@ -156,7 +169,7 @@ Texto del pedido: ""{texto}""";
             };
 
             var interpretMsg = new HttpRequestMessage(HttpMethod.Post, GroqChatUrl);
-            interpretMsg.Headers.Authorization = new AuthenticationHeaderValue("Bearer", GetGroqApiKey());
+            interpretMsg.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await GetGroqApiKeyAsync());
             interpretMsg.Content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json");
             var response = await _httpClient.SendAsync(interpretMsg);
 

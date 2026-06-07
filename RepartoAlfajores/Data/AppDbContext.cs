@@ -14,9 +14,13 @@ public class AppDbContext : DbContext
     public DbSet<Venta> Ventas => Set<Venta>();
     public DbSet<DetalleVenta> DetalleVentas => Set<DetalleVenta>();
     public DbSet<Cobro> Cobros => Set<Cobro>();
+    public DbSet<Configuracion> Configuraciones => Set<Configuracion>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<Configuracion>()
+            .HasIndex(c => c.Clave).IsUnique();
+
         modelBuilder.Entity<Venta>()
             .Property(v => v.Total).HasPrecision(18, 2);
 

@@ -10,12 +10,15 @@ public class ConfiguracionController : Controller
 {
     private readonly IZonaService _zonaService;
     private readonly ICategoriaService _categoriaService;
+    private readonly IConfiguracionService _configuracionService;
     private readonly IConfiguration _config;
 
-    public ConfiguracionController(IZonaService zonaService, ICategoriaService categoriaService, IConfiguration config)
+    public ConfiguracionController(IZonaService zonaService, ICategoriaService categoriaService,
+        IConfiguracionService configuracionService, IConfiguration config)
     {
         _zonaService = zonaService;
         _categoriaService = categoriaService;
+        _configuracionService = configuracionService;
         _config = config;
     }
 
@@ -24,7 +27,26 @@ public class ConfiguracionController : Controller
         ViewBag.Zonas = await _zonaService.GetAllAsync();
         ViewBag.Categorias = await _categoriaService.GetAllAsync();
         ViewBag.NombreNegocio = _config["NombreNegocio"];
+
+        var groqKey = await _configuracionService.GetValorAsync("GroqApiKey") ?? "";
+        ViewBag.GroqKeyConfigurada = !string.IsNullOrWhiteSpace(groqKey);
+        ViewBag.GroqKeyMasked = groqKey.Length > 8
+            ? groqKey[..4] + new string('•', 8) + groqKey[^4..]
+            : (groqKey.Length > 0 ? new string('•', groqKey.Length) : "");
         return View();
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> GuardarApiKey(string groqApiKey)
+    {
+        if (string.IsNullOrWhiteSpace(groqApiKey))
+        {
+            TempData["Error"] = "Ingresá una API key válida";
+            return RedirectToAction(nameof(Index));
+        }
+        await _configuracionService.SetValorAsync("GroqApiKey", groqApiKey.Trim());
+        TempData["Success"] = "API key de Groq guardada correctamente";
+        return RedirectToAction(nameof(Index));
     }
 
     [HttpPost]
