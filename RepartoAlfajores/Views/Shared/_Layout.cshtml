@@ -100,7 +100,31 @@
     <a asp-controller="Reportes" asp-action="Index" class="@(controller == "Reportes" ? "active" : "")">
         <i class="bi bi-bar-chart"></i><span>Reportes</span>
     </a>
+    <a href="#" data-bs-toggle="offcanvas" data-bs-target="#mobileMore"
+       class="@(controller == "Configuracion" ? "active" : "")">
+        <i class="bi bi-three-dots"></i><span>Más</span>
+    </a>
 </nav>
+
+<!-- Offcanvas Más (mobile) -->
+<div class="offcanvas offcanvas-bottom d-md-none" tabindex="-1" id="mobileMore" style="height:auto;" aria-labelledby="mobileMoreLabel">
+    <div class="offcanvas-header">
+        <h6 class="offcanvas-title mb-0" id="mobileMoreLabel">Más opciones</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+    </div>
+    <div class="offcanvas-body pt-0">
+        <a asp-controller="Configuracion" asp-action="Index"
+           class="d-flex align-items-center gap-2 py-3 text-decoration-none border-bottom">
+            <i class="bi bi-gear fs-5"></i> Configuración
+        </a>
+        <form asp-controller="Auth" asp-action="Logout" method="post" class="m-0">
+            <button type="submit"
+                    class="d-flex align-items-center gap-2 py-3 w-100 text-start border-0 bg-transparent text-danger" style="cursor:pointer">
+                <i class="bi bi-box-arrow-right fs-5"></i> Cerrar sesión
+            </button>
+        </form>
+    </div>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
