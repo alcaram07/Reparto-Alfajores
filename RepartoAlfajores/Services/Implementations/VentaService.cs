@@ -70,6 +70,28 @@ public class VentaService : IVentaService
         venta.Total = venta.Detalles.Sum(d => d.Cantidad * d.PrecioUnitario);
         _db.Ventas.Add(venta);
         await _db.SaveChangesAsync();
+
+        if (venta.EstadoCobro == EstadoCobro.CuentaCorriente)
+        {
+            var saldoPrevio = await _db.MovimientosCC
+                .Where(m => m.ClienteId == venta.ClienteId)
+                .OrderByDescending(m => m.Id)
+                .Select(m => (decimal?)m.SaldoAcumulado)
+                .FirstOrDefaultAsync() ?? 0m;
+
+            _db.MovimientosCC.Add(new MovimientoCC
+            {
+                ClienteId = venta.ClienteId,
+                Fecha = venta.Fecha,
+                Tipo = TipoMovimientoCC.Cargo,
+                Monto = venta.Total,
+                SaldoAcumulado = saldoPrevio + venta.Total,
+                Descripcion = $"Venta #{venta.Id}",
+                VentaId = venta.Id
+            });
+            await _db.SaveChangesAsync();
+        }
+
         return venta;
     }
 

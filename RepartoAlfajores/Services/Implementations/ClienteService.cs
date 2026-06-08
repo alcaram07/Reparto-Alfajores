@@ -78,18 +78,12 @@ public class ClienteService : IClienteService
         return true;
     }
 
-    public async Task<decimal> GetSaldoPendienteAsync(int clienteId)
-    {
-        var totalVentasCC = await _db.Ventas
-            .Where(v => v.ClienteId == clienteId && v.EstadoCobro == EstadoCobro.CuentaCorriente)
-            .SumAsync(v => (decimal?)v.Total) ?? 0;
-
-        var totalCobros = await _db.Cobros
-            .Where(c => c.ClienteId == clienteId)
-            .SumAsync(c => (decimal?)c.Monto) ?? 0;
-
-        return totalVentasCC - totalCobros;
-    }
+    public async Task<decimal> GetSaldoPendienteAsync(int clienteId) =>
+        await _db.MovimientosCC
+            .Where(m => m.ClienteId == clienteId)
+            .OrderByDescending(m => m.Id)
+            .Select(m => (decimal?)m.SaldoAcumulado)
+            .FirstOrDefaultAsync() ?? 0m;
 
     public async Task<IEnumerable<Venta>> GetVentasByClienteAsync(int clienteId) =>
         await _db.Ventas

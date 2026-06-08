@@ -15,6 +15,7 @@ public class AppDbContext : DbContext
     public DbSet<DetalleVenta> DetalleVentas => Set<DetalleVenta>();
     public DbSet<Cobro> Cobros => Set<Cobro>();
     public DbSet<Configuracion> Configuraciones => Set<Configuracion>();
+    public DbSet<MovimientoCC> MovimientosCC => Set<MovimientoCC>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -33,6 +34,12 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<Cobro>()
             .Property(c => c.Monto).HasPrecision(18, 2);
 
+        modelBuilder.Entity<MovimientoCC>()
+            .Property(m => m.Monto).HasPrecision(18, 2);
+
+        modelBuilder.Entity<MovimientoCC>()
+            .Property(m => m.SaldoAcumulado).HasPrecision(18, 2);
+
         modelBuilder.Entity<Cliente>()
             .HasMany(c => c.Ventas)
             .WithOne(v => v.Cliente)
@@ -43,6 +50,24 @@ public class AppDbContext : DbContext
             .HasMany<Cobro>()
             .WithOne(c => c.Cliente)
             .HasForeignKey(c => c.ClienteId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Cliente>()
+            .HasMany<MovimientoCC>()
+            .WithOne(m => m.Cliente)
+            .HasForeignKey(m => m.ClienteId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<MovimientoCC>()
+            .HasOne(m => m.Venta)
+            .WithMany()
+            .HasForeignKey(m => m.VentaId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<MovimientoCC>()
+            .HasOne(m => m.Cobro)
+            .WithMany()
+            .HasForeignKey(m => m.CobroId)
             .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<Venta>()

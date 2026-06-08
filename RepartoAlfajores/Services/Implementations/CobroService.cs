@@ -34,72 +34,88 @@ public class CobroService : ICobroService
         };
         _db.Cobros.Add(cobro);
         await _db.SaveChangesAsync();
+
+        var saldoPrevio = await _db.MovimientosCC
+            .Where(m => m.ClienteId == vm.ClienteId)
+            .OrderByDescending(m => m.Id)
+            .Select(m => (decimal?)m.SaldoAcumulado)
+            .FirstOrDefaultAsync() ?? 0m;
+
+        _db.MovimientosCC.Add(new MovimientoCC
+        {
+            ClienteId = vm.ClienteId,
+            Fecha = cobro.Fecha,
+            Tipo = TipoMovimientoCC.Abono,
+            Monto = cobro.Monto,
+            SaldoAcumulado = Math.Max(0, saldoPrevio - cobro.Monto),
+            Descripcion = $"Cobro #{cobro.Id}",
+            CobroId = cobro.Id
+        });
+        await _db.SaveChangesAsync();
+
         return cobro;
     }
 
     public async Task<IEnumerable<DeudorViewModel>> GetDeudoresAsync()
     {
-        var ventasCC = await _db.Ventas
-            .Where(v => v.EstadoCobro == EstadoCobro.CuentaCorriente)
-            .GroupBy(v => v.ClienteId)
-            .Select(g => new { ClienteId = g.Key, Total = g.Sum(v => v.Total) })
+        // Saldo actual = SaldoAcumulado del último movimiento por cliente
+        var saldosPorCliente = await _db.MovimientosCC
+            .GroupBy(m => m.ClienteId)
+            .Select(g => new
+            {
+                ClienteId = g.Key,
+                Saldo = g.OrderByDescending(m => m.Id).First().SaldoAcumulado
+            })
+            .Where(x => x.Saldo > 0)
             .ToListAsync();
 
-        var cobros = await _db.Cobros
-            .GroupBy(c => c.ClienteId)
-            .Select(g => new { ClienteId = g.Key, Total = g.Sum(c => c.Monto) })
+        if (!saldosPorCliente.Any()) return [];
+
+        var clienteIds = saldosPorCliente.Select(x => x.ClienteId).ToList();
+
+        var clientes = await _db.Clientes
+            .Include(c => c.Zona)
+            .Where(c => clienteIds.Contains(c.Id))
             .ToListAsync();
 
         var ultimosPagos = await _db.Cobros
+            .Where(c => clienteIds.Contains(c.ClienteId))
             .GroupBy(c => c.ClienteId)
             .Select(g => new { ClienteId = g.Key, UltimoPago = g.Max(c => c.Fecha) })
             .ToListAsync();
 
-        var primerasVentasSinCobrar = await _db.Ventas
-            .Where(v => v.EstadoCobro == EstadoCobro.CuentaCorriente)
+        var primerasVentasCC = await _db.Ventas
+            .Where(v => v.EstadoCobro == EstadoCobro.CuentaCorriente && clienteIds.Contains(v.ClienteId))
             .GroupBy(v => v.ClienteId)
             .Select(g => new { ClienteId = g.Key, Primera = g.Min(v => v.Fecha) })
             .ToListAsync();
 
-        var clientes = await _db.Clientes.Include(c => c.Zona).ToListAsync();
-
-        var deudores = new List<DeudorViewModel>();
-        foreach (var vc in ventasCC)
+        var deudores = saldosPorCliente.Select(x =>
         {
-            var totalCobros = cobros.FirstOrDefault(c => c.ClienteId == vc.ClienteId)?.Total ?? 0;
-            var saldo = vc.Total - totalCobros;
-            if (saldo <= 0) continue;
-
-            var cliente = clientes.FirstOrDefault(c => c.Id == vc.ClienteId);
-            if (cliente == null) continue;
-
-            var primeraVenta = primerasVentasSinCobrar.FirstOrDefault(p => p.ClienteId == vc.ClienteId);
+            var cliente = clientes.First(c => c.Id == x.ClienteId);
+            var primeraVenta = primerasVentasCC.FirstOrDefault(p => p.ClienteId == x.ClienteId);
             var dias = primeraVenta != null ? (DateTime.UtcNow - primeraVenta.Primera).Days : 0;
-            var ultimoPago = ultimosPagos.FirstOrDefault(u => u.ClienteId == vc.ClienteId)?.UltimoPago;
+            var ultimoPago = ultimosPagos.FirstOrDefault(u => u.ClienteId == x.ClienteId)?.UltimoPago;
 
-            deudores.Add(new DeudorViewModel
+            return new DeudorViewModel
             {
-                ClienteId = vc.ClienteId,
+                ClienteId = x.ClienteId,
                 Nombre = cliente.Nombre,
                 Zona = cliente.Zona.Nombre,
-                Saldo = saldo,
+                Saldo = x.Saldo,
                 DiasDeuda = dias,
                 UltimoPago = ultimoPago
-            });
-        }
+            };
+        });
 
         return deudores.OrderByDescending(d => d.DiasDeuda);
     }
 
-    public async Task<decimal> GetTotalPorCobrarAsync()
-    {
-        var ventasCC = await _db.Ventas
-            .Where(v => v.EstadoCobro == EstadoCobro.CuentaCorriente)
-            .SumAsync(v => (decimal?)v.Total) ?? 0;
-
-        var totalCobros = await _db.Cobros.SumAsync(c => (decimal?)c.Monto) ?? 0;
-        return Math.Max(0, ventasCC - totalCobros);
-    }
+    public async Task<decimal> GetTotalPorCobrarAsync() =>
+        await _db.MovimientosCC
+            .GroupBy(m => m.ClienteId)
+            .Select(g => g.OrderByDescending(m => m.Id).First().SaldoAcumulado)
+            .SumAsync(s => (decimal?)s) ?? 0m;
 
     public async Task<decimal> GetTotalCobradoHoyAsync()
     {
