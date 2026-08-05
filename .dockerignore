@@ -1,0 +1,12 @@
+# Artefactos de build locales: si se copian a la imagen ensucian el publish
+# con rutas de Windows y engordan el contexto.
+**/bin/
+**/obj/
+
+# El proyecto de tests no forma parte de la imagen.
+RepartoAlfajores.Tests/
+
+.git/
+.gitignore
+*.md
+*.docx
