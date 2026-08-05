@@ -26,7 +26,7 @@
                         <small class="text-muted">@Model.Cliente?.Zona?.Nombre · @Model.Cliente?.Direccion</small>
                     </div>
                     <div class="text-end">
-                        <div class="text-muted" style="font-size:0.85rem">@Model.Fecha.ToString("dd/MM/yyyy HH:mm")</div>
+                        <div class="text-muted" style="font-size:0.85rem">@Model.Fecha.ALocal().ToString("dd/MM/yyyy HH:mm")</div>
                         @if (Model.EstadoCobro == EstadoCobro.Cobrado)
                         {<span class="badge-ok">Cobrado</span>}
                         else

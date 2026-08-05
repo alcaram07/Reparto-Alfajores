@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RepartoAlfajores.Services.Interfaces;
+using RepartoAlfajores.Utils;
 
 namespace RepartoAlfajores.Controllers;
 
@@ -31,7 +32,7 @@ public class ReportesController : Controller
 
     private static (DateTime Desde, DateTime Hasta) ResolverRango(string tab, DateTime? desde, DateTime? hasta)
     {
-        var hoy = DateTime.UtcNow.Date;
+        var hoy = FechaAr.Hoy;
         return tab switch
         {
             "hoy" => (hoy, hoy),

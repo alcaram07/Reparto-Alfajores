@@ -10,11 +10,14 @@ public class CobrosController : Controller
 {
     private readonly ICobroService _cobroService;
     private readonly IClienteService _clienteService;
+    private readonly ICuentaCorrienteService _cuentaCorriente;
 
-    public CobrosController(ICobroService cobroService, IClienteService clienteService)
+    public CobrosController(ICobroService cobroService, IClienteService clienteService,
+        ICuentaCorrienteService cuentaCorriente)
     {
         _cobroService = cobroService;
         _clienteService = clienteService;
+        _cuentaCorriente = cuentaCorriente;
     }
 
     public async Task<IActionResult> Index(int? clienteId)
@@ -50,8 +53,22 @@ public class CobrosController : Controller
             TempData["Error"] = "Datos del cobro inválidos";
             return RedirectToAction(nameof(Index));
         }
-        await _cobroService.CreateAsync(vm);
-        TempData["Success"] = "Cobro registrado correctamente";
+        try
+        {
+            await _cobroService.CreateAsync(vm);
+        }
+        catch (InvalidOperationException ex)
+        {
+            TempData["Error"] = ex.Message;
+            return RedirectToAction(nameof(Index));
+        }
+
+        // Un pago mayor a la deuda deja saldo negativo: se avisa para que no parezca un error.
+        var saldo = await _cuentaCorriente.GetSaldoAsync(vm.ClienteId);
+        TempData["Success"] = saldo < 0
+            ? $"Cobro registrado. El cliente queda con ${-saldo:N2} a favor."
+            : "Cobro registrado correctamente";
+
         return RedirectToAction(nameof(Index));
     }
 }

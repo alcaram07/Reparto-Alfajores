@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RepartoAlfajores.Models;
 using RepartoAlfajores.Services.Interfaces;
+using RepartoAlfajores.Utils;
 using RepartoAlfajores.ViewModels;
 
 namespace RepartoAlfajores.Controllers;
@@ -34,7 +35,7 @@ public class VentasController : Controller
         ViewBag.Busqueda = busqueda;
         ViewBag.Estado = estado;
         ViewBag.ZonaId = zonaId;
-        ViewBag.Fecha = (fecha ?? DateTime.UtcNow.Date).ToString("yyyy-MM-dd");
+        ViewBag.Fecha = (fecha ?? FechaAr.Hoy).ToString("yyyy-MM-dd");
         return View(ventas);
     }
 
@@ -96,8 +97,11 @@ public class VentasController : Controller
     [HttpPost]
     public async Task<IActionResult> Eliminar(int id)
     {
-        await _ventaService.DeleteAsync(id);
-        TempData["Success"] = "Venta eliminada";
+        if (await _ventaService.DeleteAsync(id))
+            TempData["Success"] = "Venta eliminada";
+        else
+            TempData["Error"] = "La venta no existe o ya fue eliminada";
+
         return RedirectToAction(nameof(Index));
     }
 }

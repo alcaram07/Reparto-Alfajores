@@ -81,7 +81,7 @@
                                         <td class="fw-bold" style="color:var(--color-danger)">$@Fmt(d.Saldo)</td>
                                         <td><span class="@BadgeDias(d.DiasDeuda)">@d.DiasDeuda días</span></td>
                                         <td class="text-muted">
-                                            @(d.UltimoPago.HasValue ? d.UltimoPago.Value.ToString("dd/MM/yy") : "—")
+                                            @(d.UltimoPago.HasValue ? d.UltimoPago.Value.ALocal().ToString("dd/MM/yy") : "—")
                                         </td>
                                         <td>
                                             <a asp-action="Index" asp-route-clienteId="@d.ClienteId"
@@ -117,7 +117,7 @@
                                     <span class="text-muted ms-2">· @c.MetodoPago</span>
                                 </div>
                                 <div class="d-flex align-items-center gap-2">
-                                    <small class="text-muted">@c.Fecha.ToString("HH:mm")</small>
+                                    <small class="text-muted">@c.Fecha.ALocal().ToString("HH:mm")</small>
                                     <span class="fw-bold" style="color:var(--color-success)">$@Fmt(c.Monto)</span>
                                 </div>
                             </li>

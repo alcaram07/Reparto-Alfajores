@@ -58,6 +58,7 @@ builder.Services.AddScoped<IZonaService, ZonaService>();
 builder.Services.AddScoped<ICategoriaService, CategoriaService>();
 builder.Services.AddScoped<IClienteService, ClienteService>();
 builder.Services.AddScoped<IProductoService, ProductoService>();
+builder.Services.AddScoped<ICuentaCorrienteService, CuentaCorrienteService>();
 builder.Services.AddScoped<IVentaService, VentaService>();
 builder.Services.AddScoped<ICobroService, CobroService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();

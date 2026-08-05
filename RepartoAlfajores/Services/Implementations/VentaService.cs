@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using RepartoAlfajores.Data;
 using RepartoAlfajores.Models;
 using RepartoAlfajores.Services.Interfaces;
+using RepartoAlfajores.Utils;
 using RepartoAlfajores.ViewModels;
 
 namespace RepartoAlfajores.Services.Implementations;
@@ -9,7 +10,13 @@ namespace RepartoAlfajores.Services.Implementations;
 public class VentaService : IVentaService
 {
     private readonly AppDbContext _db;
-    public VentaService(AppDbContext db) => _db = db;
+    private readonly ICuentaCorrienteService _cuentaCorriente;
+
+    public VentaService(AppDbContext db, ICuentaCorrienteService cuentaCorriente)
+    {
+        _db = db;
+        _cuentaCorriente = cuentaCorriente;
+    }
 
     public async Task<IEnumerable<Venta>> GetAllAsync(DateTime? fecha = null, string? busqueda = null, EstadoCobro? estado = null, int? zonaId = null)
     {
@@ -18,9 +25,8 @@ public class VentaService : IVentaService
             .Include(v => v.Detalles).ThenInclude(d => d.Producto)
             .AsQueryable();
 
-        var fechaFiltro = fecha ?? DateTime.UtcNow.Date;
-        var siguiente = fechaFiltro.Date.AddDays(1);
-        q = q.Where(v => v.Fecha >= fechaFiltro.Date && v.Fecha < siguiente);
+        var (desde, hasta) = FechaAr.RangoDia(fecha ?? FechaAr.Hoy);
+        q = q.Where(v => v.Fecha >= desde && v.Fecha < hasta);
 
         if (!string.IsNullOrWhiteSpace(busqueda))
             q = q.Where(v => v.Cliente.Nombre.Contains(busqueda));
@@ -68,39 +74,63 @@ public class VentaService : IVentaService
         }
 
         venta.Total = venta.Detalles.Sum(d => d.Cantidad * d.PrecioUnitario);
-        _db.Ventas.Add(venta);
-        await _db.SaveChangesAsync();
 
-        if (venta.EstadoCobro == EstadoCobro.CuentaCorriente)
+        // La venta y su cargo en cuenta corriente tienen que persistirse juntos: si sólo
+        // entrara la venta, la deuda del cliente se perdería sin dejar rastro.
+        // EnableRetryOnFailure exige abrir la transacción a través de la execution strategy.
+        var strategy = _db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
         {
-            var saldoPrevio = await _db.MovimientosCC
-                .Where(m => m.ClienteId == venta.ClienteId)
-                .OrderByDescending(m => m.Id)
-                .Select(m => (decimal?)m.SaldoAcumulado)
-                .FirstOrDefaultAsync() ?? 0m;
+            await using var tx = await _db.Database.BeginTransactionAsync();
 
-            _db.MovimientosCC.Add(new MovimientoCC
-            {
-                ClienteId = venta.ClienteId,
-                Fecha = venta.Fecha,
-                Tipo = TipoMovimientoCC.Cargo,
-                Monto = venta.Total,
-                SaldoAcumulado = saldoPrevio + venta.Total,
-                Descripcion = $"Venta #{venta.Id}",
-                VentaId = venta.Id
-            });
+            if (venta.EstadoCobro == EstadoCobro.CuentaCorriente)
+                await _cuentaCorriente.BloquearClienteAsync(venta.ClienteId);
+
+            _db.Ventas.Add(venta);
             await _db.SaveChangesAsync();
-        }
+
+            if (venta.EstadoCobro == EstadoCobro.CuentaCorriente)
+            {
+                await _cuentaCorriente.RegistrarMovimientoAsync(
+                    venta.ClienteId, TipoMovimientoCC.Cargo, venta.Total,
+                    $"Venta #{venta.Id}", venta.Fecha, ventaId: venta.Id);
+            }
+
+            await tx.CommitAsync();
+        });
 
         return venta;
     }
 
     public async Task<bool> DeleteAsync(int id)
     {
-        var venta = await _db.Ventas.Include(v => v.Detalles).FirstOrDefaultAsync(v => v.Id == id);
-        if (venta == null) return false;
-        _db.Ventas.Remove(venta);
-        await _db.SaveChangesAsync();
-        return true;
+        var strategy = _db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await _db.Database.BeginTransactionAsync();
+
+            var venta = await _db.Ventas.Include(v => v.Detalles).FirstOrDefaultAsync(v => v.Id == id);
+            if (venta == null) return false;
+
+            var clienteId = venta.ClienteId;
+            await _cuentaCorriente.BloquearClienteAsync(clienteId);
+
+            // MovimientosCC referencia la venta con FK Restrict: sin borrar el movimiento
+            // primero, Postgres rechaza el DELETE y la operación termina en error 500.
+            var movimiento = await _db.MovimientosCC.FirstOrDefaultAsync(m => m.VentaId == id);
+            var eraCuentaCorriente = movimiento != null;
+            if (movimiento != null)
+                _db.MovimientosCC.Remove(movimiento);
+
+            _db.Ventas.Remove(venta);
+            await _db.SaveChangesAsync();
+
+            // Al sacar un movimiento del medio hay que rehacer la cadena de saldos posteriores.
+            if (eraCuentaCorriente)
+                await _cuentaCorriente.RecalcularSaldosAsync(clienteId);
+
+            await tx.CommitAsync();
+            return true;
+        });
     }
 }

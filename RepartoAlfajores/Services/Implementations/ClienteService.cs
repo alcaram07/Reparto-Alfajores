@@ -10,7 +10,13 @@ namespace RepartoAlfajores.Services.Implementations;
 public class ClienteService : IClienteService
 {
     private readonly AppDbContext _db;
-    public ClienteService(AppDbContext db) => _db = db;
+    private readonly ICuentaCorrienteService _cuentaCorriente;
+
+    public ClienteService(AppDbContext db, ICuentaCorrienteService cuentaCorriente)
+    {
+        _db = db;
+        _cuentaCorriente = cuentaCorriente;
+    }
 
     public async Task<IEnumerable<Cliente>> GetAllAsync(string? busqueda = null, int? zonaId = null, string? estadoDeuda = null)
     {
@@ -78,12 +84,8 @@ public class ClienteService : IClienteService
         return true;
     }
 
-    public async Task<decimal> GetSaldoPendienteAsync(int clienteId) =>
-        await _db.MovimientosCC
-            .Where(m => m.ClienteId == clienteId)
-            .OrderByDescending(m => m.Id)
-            .Select(m => (decimal?)m.SaldoAcumulado)
-            .FirstOrDefaultAsync() ?? 0m;
+    public Task<decimal> GetSaldoPendienteAsync(int clienteId) =>
+        _cuentaCorriente.GetSaldoAsync(clienteId);
 
     public async Task<IEnumerable<Venta>> GetVentasByClienteAsync(int clienteId) =>
         await _db.Ventas
