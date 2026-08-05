@@ -25,6 +25,20 @@ dotnet ef database update
 
 Las migraciones están en `RepartoAlfajores/Data/Migrations/`. EF Core las aplica automáticamente al arrancar (`MigrateAsync` en `Program.cs`).
 
+## Tests
+
+```bash
+dotnet test RepartoAlfajores.Tests
+```
+
+Corren contra **PostgreSQL real**, no un proveedor en memoria: la lógica de cuenta corriente
+depende de transacciones sobre la execution strategy de reintentos, `SELECT … FOR UPDATE` y
+FKs con `RESTRICT`, que un proveedor in-memory no reproduce.
+
+Cada corrida crea una base descartable (`reparto_tests_<guid>`), le aplica las migraciones y la
+borra al terminar. Por defecto se conecta a `localhost:5432` con `postgres`/`postgres`;
+se puede cambiar con `TEST_PG_HOST`, `TEST_PG_PORT`, `TEST_PG_USER` y `TEST_PG_PASSWORD`.
+
 ## Estructura del proyecto
 
 ```
@@ -41,10 +55,22 @@ RepartoAlfajores/
 ├── Services/
 │   ├── Interfaces/
 │   └── Implementations/
+├── Utils/              # FechaAr (zona horaria Argentina)
 ├── ViewModels/
 ├── Views/
 └── wwwroot/
+
+RepartoAlfajores.Tests/ # xUnit, corre contra PostgreSQL real
 ```
+
+## Fechas y zona horaria
+
+Las fechas se guardan **siempre en UTC**, pero el negocio opera en hora argentina (UTC−3).
+Nunca usar `DateTime.UtcNow.Date` para definir "el día": usar `FechaAr` (`Utils/FechaAr.cs`).
+
+- `FechaAr.Hoy` → el día de hoy en el calendario argentino.
+- `FechaAr.RangoDia(dia)` / `FechaAr.Rango(desde, hasta)` → límites `[desde, hasta)` en UTC para filtrar.
+- `fecha.ALocal()` → convierte a hora argentina para mostrar (usarlo en las vistas).
 
 ## Modelos clave
 
@@ -67,10 +93,27 @@ enum TipoMovimientoCC { Cargo, Abono }
 
 ## Cuenta corriente — cómo funciona
 
-- Al crear una venta con `MetodoPago=CuentaCorriente`: `VentaService` inserta un `MovimientoCC` tipo `Cargo`.
-- Al registrar un `Cobro`: `CobroService` inserta un `MovimientoCC` tipo `Abono`.
-- El saldo actual de un cliente = `SaldoAcumulado` del último `MovimientoCC` del cliente.
-- `ClienteService.GetSaldoPendienteAsync` y `CobroService.GetDeudoresAsync` leen de `MovimientosCC` (no hacen SUM histórico).
+Toda la lógica de saldos vive en **`CuentaCorrienteService`**. `VentaService`, `CobroService` y
+`ClienteService` delegan ahí; no dupliquen el cálculo de saldos en otro lado.
+
+- Al crear una venta con `MetodoPago=CuentaCorriente` se registra un `MovimientoCC` tipo `Cargo`.
+- Al registrar un `Cobro` se registra un `MovimientoCC` tipo `Abono`.
+- El saldo actual de un cliente = `SaldoAcumulado` del último `MovimientoCC` del cliente
+  (no se hace SUM histórico).
+
+Reglas que hay que respetar al tocar este código:
+
+- **Venta/cobro y su movimiento van en una transacción.** Como el `DbContext` usa
+  `EnableRetryOnFailure`, la transacción debe abrirse a través de
+  `Database.CreateExecutionStrategy()`; `BeginTransactionAsync` suelto tira excepción.
+- **Bloquear al cliente antes de leer el saldo** (`BloquearClienteAsync`, un `SELECT … FOR UPDATE`).
+  Sin eso, dos operaciones simultáneas leen el mismo saldo previo y una pisa a la otra.
+- **El saldo puede ser negativo**: significa crédito a favor del cliente (pagó de más).
+  No recortarlo con `Math.Max(0, …)` — eso hace desaparecer plata del libro mayor.
+- **`SaldoAcumulado` es un valor materializado.** Si se elimina un movimiento del medio hay que
+  llamar a `RecalcularSaldosAsync` para rehacer la cadena posterior.
+- `MovimientosCC` referencia `Ventas` y `Cobros` con FK `RESTRICT`: para borrar una venta de
+  cuenta corriente hay que borrar antes su movimiento.
 
 ## Auth
 

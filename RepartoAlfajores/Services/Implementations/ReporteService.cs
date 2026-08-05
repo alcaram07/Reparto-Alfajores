@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using RepartoAlfajores.Data;
 using RepartoAlfajores.Models;
 using RepartoAlfajores.Services.Interfaces;
+using RepartoAlfajores.Utils;
 using RepartoAlfajores.ViewModels;
 
 namespace RepartoAlfajores.Services.Implementations;
@@ -13,16 +14,16 @@ public class ReporteService : IReporteService
 
     public async Task<ReporteViewModel> GetReporteAsync(DateTime desde, DateTime hasta)
     {
-        var hastaFin = hasta.Date.AddDays(1);
+        var (desdeUtc, hastaUtc) = FechaAr.Rango(desde, hasta);
 
         var ventas = await _db.Ventas
             .Include(v => v.Cliente).ThenInclude(c => c.Zona)
             .Include(v => v.Detalles).ThenInclude(d => d.Producto)
-            .Where(v => v.Fecha >= desde.Date && v.Fecha < hastaFin)
+            .Where(v => v.Fecha >= desdeUtc && v.Fecha < hastaUtc)
             .ToListAsync();
 
         var cobros = await _db.Cobros
-            .Where(c => c.Fecha >= desde.Date && c.Fecha < hastaFin)
+            .Where(c => c.Fecha >= desdeUtc && c.Fecha < hastaUtc)
             .ToListAsync();
 
         var totalVendido = ventas.Sum(v => v.Total);
@@ -34,7 +35,8 @@ public class ReporteService : IReporteService
             .Sum(v => v.Total) - cobros.Sum(c => c.Monto);
 
         var ventasDia = ventas
-            .GroupBy(v => v.Fecha.Date)
+            // Agrupado por día del calendario argentino, no por día UTC.
+            .GroupBy(v => v.Fecha.ALocal().Date)
             .Select(g => new VentaDiaDto
             {
                 Fecha = g.Key,

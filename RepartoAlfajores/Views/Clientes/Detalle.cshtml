@@ -83,7 +83,7 @@
                                 @foreach (var v in ventas.Take(20))
                                 {
                                     <tr>
-                                        <td>@v.Fecha.ToString("dd/MM/yy HH:mm")</td>
+                                        <td>@v.Fecha.ALocal().ToString("dd/MM/yy HH:mm")</td>
                                         <td class="text-muted">@ResumenProductos(v.Detalles)</td>
                                         <td><strong>$@Fmt(v.Total)</strong></td>
                                         <td>
@@ -120,7 +120,7 @@
                                 @foreach (var c in cobros.Take(20))
                                 {
                                     <tr>
-                                        <td>@c.Fecha.ToString("dd/MM/yy HH:mm")</td>
+                                        <td>@c.Fecha.ALocal().ToString("dd/MM/yy HH:mm")</td>
                                         <td>@c.MetodoPago</td>
                                         <td><strong class="text-success">$@Fmt(c.Monto)</strong></td>
                                         <td class="text-muted">@c.Nota</td>

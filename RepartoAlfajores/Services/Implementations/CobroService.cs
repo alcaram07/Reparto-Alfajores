@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using RepartoAlfajores.Data;
 using RepartoAlfajores.Models;
 using RepartoAlfajores.Services.Interfaces;
+using RepartoAlfajores.Utils;
 using RepartoAlfajores.ViewModels;
 
 namespace RepartoAlfajores.Services.Implementations;
@@ -9,21 +10,33 @@ namespace RepartoAlfajores.Services.Implementations;
 public class CobroService : ICobroService
 {
     private readonly AppDbContext _db;
-    public CobroService(AppDbContext db) => _db = db;
+    private readonly ICuentaCorrienteService _cuentaCorriente;
+
+    public CobroService(AppDbContext db, ICuentaCorrienteService cuentaCorriente)
+    {
+        _db = db;
+        _cuentaCorriente = cuentaCorriente;
+    }
 
     public async Task<IEnumerable<Cobro>> GetAllAsync(DateTime? fecha = null)
     {
-        var dia = (fecha ?? DateTime.UtcNow).Date;
-        var siguiente = dia.AddDays(1);
+        var (desde, hasta) = FechaAr.RangoDia(fecha ?? FechaAr.Hoy);
         return await _db.Cobros
             .Include(c => c.Cliente)
-            .Where(c => c.Fecha >= dia && c.Fecha < siguiente)
+            .Where(c => c.Fecha >= desde && c.Fecha < hasta)
             .OrderByDescending(c => c.Fecha)
             .ToListAsync();
     }
 
     public async Task<Cobro> CreateAsync(CobroViewModel vm)
     {
+        var clienteExiste = await _db.Clientes.AnyAsync(c => c.Id == vm.ClienteId);
+        if (!clienteExiste)
+            throw new InvalidOperationException("El cliente indicado no existe.");
+
+        if (vm.Monto <= 0)
+            throw new InvalidOperationException("El monto del cobro debe ser mayor a cero.");
+
         var cobro = new Cobro
         {
             ClienteId = vm.ClienteId,
@@ -32,26 +45,26 @@ public class CobroService : ICobroService
             Fecha = DateTime.UtcNow,
             Nota = vm.Nota?.Trim()
         };
-        _db.Cobros.Add(cobro);
-        await _db.SaveChangesAsync();
 
-        var saldoPrevio = await _db.MovimientosCC
-            .Where(m => m.ClienteId == vm.ClienteId)
-            .OrderByDescending(m => m.Id)
-            .Select(m => (decimal?)m.SaldoAcumulado)
-            .FirstOrDefaultAsync() ?? 0m;
-
-        _db.MovimientosCC.Add(new MovimientoCC
+        // El cobro y su abono en cuenta corriente van juntos: si sólo entrara el cobro,
+        // el cliente seguiría figurando como deudor de algo que ya pagó.
+        // EnableRetryOnFailure exige abrir la transacción a través de la execution strategy.
+        var strategy = _db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
         {
-            ClienteId = vm.ClienteId,
-            Fecha = cobro.Fecha,
-            Tipo = TipoMovimientoCC.Abono,
-            Monto = cobro.Monto,
-            SaldoAcumulado = Math.Max(0, saldoPrevio - cobro.Monto),
-            Descripcion = $"Cobro #{cobro.Id}",
-            CobroId = cobro.Id
+            await using var tx = await _db.Database.BeginTransactionAsync();
+
+            await _cuentaCorriente.BloquearClienteAsync(cobro.ClienteId);
+
+            _db.Cobros.Add(cobro);
+            await _db.SaveChangesAsync();
+
+            await _cuentaCorriente.RegistrarMovimientoAsync(
+                cobro.ClienteId, TipoMovimientoCC.Abono, cobro.Monto,
+                $"Cobro #{cobro.Id}", cobro.Fecha, cobroId: cobro.Id);
+
+            await tx.CommitAsync();
         });
-        await _db.SaveChangesAsync();
 
         return cobro;
     }
@@ -115,14 +128,16 @@ public class CobroService : ICobroService
         await _db.MovimientosCC
             .GroupBy(m => m.ClienteId)
             .Select(g => g.OrderByDescending(m => m.Id).First().SaldoAcumulado)
+            // Sólo los saldos deudores: un cliente con crédito a favor no debe
+            // descontar de lo que el resto adeuda.
+            .Where(s => s > 0)
             .SumAsync(s => (decimal?)s) ?? 0m;
 
     public async Task<decimal> GetTotalCobradoHoyAsync()
     {
-        var hoy = DateTime.UtcNow.Date;
-        var siguiente = hoy.AddDays(1);
+        var (desde, hasta) = FechaAr.RangoDia(FechaAr.Hoy);
         return await _db.Cobros
-            .Where(c => c.Fecha >= hoy && c.Fecha < siguiente)
+            .Where(c => c.Fecha >= desde && c.Fecha < hasta)
             .SumAsync(c => (decimal?)c.Monto) ?? 0;
     }
 }

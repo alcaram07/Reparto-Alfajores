@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using RepartoAlfajores.Data;
 using RepartoAlfajores.Models;
 using RepartoAlfajores.Services.Interfaces;
+using RepartoAlfajores.Utils;
 using RepartoAlfajores.ViewModels;
 
 namespace RepartoAlfajores.Services.Implementations;
@@ -19,8 +20,7 @@ public class DashboardService : IDashboardService
 
     public async Task<DashboardViewModel> GetDashboardDataAsync()
     {
-        var hoy = DateTime.UtcNow.Date;
-        var siguiente = hoy.AddDays(1);
+        var (hoy, siguiente) = FechaAr.RangoDia(FechaAr.Hoy);
 
         var ventasHoy = await _db.Ventas
             .Include(v => v.Cliente).ThenInclude(c => c.Zona)
