@@ -13,7 +13,9 @@ public class CobroViewModel
     public int ClienteId { get; set; }
 
     [Required(ErrorMessage = "Ingrese un monto")]
-    [Range(0.01, double.MaxValue, ErrorMessage = "El monto debe ser mayor a 0")]
+    // Techo de cordura: frena el cero de más al tipear, que si no entra sin aviso y deja
+    // al cliente con un crédito a favor enorme.
+    [Range(0.01, 10_000_000, ErrorMessage = "El monto debe estar entre $0,01 y $10.000.000")]
     public decimal Monto { get; set; }
 
     public MetodoPago MetodoPago { get; set; }
