@@ -125,6 +125,43 @@ Reglas que hay que respetar al tocar este código:
 - `AIService` + `VentaVozService`: graba audio, lo manda a Groq Whisper (transcripción) y luego a Llama (extrae productos).
 - La API key se configura en `Groq:ApiKey` en appsettings o en la pantalla de Configuración (se guarda en tabla `Configuraciones`).
 
+## Backups
+
+Los datos son de plata: antes de tocar nada que escriba en `Ventas`, `Cobros` o
+`MovimientosCC`, verificá que haya un backup reciente.
+
+**Dos capas:**
+
+1. **Retención de Neon** — restore point-in-time desde el dashboard. Cubre "borré algo hace
+   un rato". Ojo: en plan free son solo **6 horas** (en los pagos, 1 día configurable hasta 7),
+   así que un error del viernes detectado el lunes ya no se recupera por acá.
+2. **Dump diario propio** (`.github/workflows/backup.yml`) — corre a las 06:00 ART, valida que
+   el dump no venga vacío o corrupto, y lo guarda como artifact por 90 días. Se puede correr a
+   mano desde Actions → *Backup de la base* → *Run workflow*. Requiere el secret
+   `BACKUP_DATABASE_URL` en el repo, idealmente con un rol de Neon de solo lectura.
+
+**Restaurar un dump:**
+
+```bash
+# 1. Bajar el artifact desde Actions y descomprimirlo
+# 2. Restaurar sobre una base limpia (NUNCA directo sobre producción)
+createdb -h localhost -U postgres reparto_restore
+pg_restore -h localhost -U postgres -d reparto_restore --no-owner --no-privileges reparto-AAAAMMDD-HHMM.dump
+
+# 3. Verificar que trajo datos antes de confiar en él
+psql -h localhost -U postgres -d reparto_restore -c \
+  'SELECT (SELECT count(*) FROM "Ventas") AS ventas,
+          (SELECT count(*) FROM "Cobros") AS cobros,
+          (SELECT count(*) FROM "MovimientosCC") AS movimientos;'
+```
+
+**Dos cosas para tener presentes:**
+
+- GitHub **deshabilita los workflows programados tras 60 días sin actividad en el repo**. Si el
+  proyecto queda quieto, hay que reactivarlo a mano desde la pestaña Actions.
+- Un backup que nunca se restauró no es un backup. Conviene hacer el drill de arriba una vez
+  por año como mínimo.
+
 ## Deploy
 
 - **Render** con Docker. Puerto interno: 10000 (`ASPNETCORE_URLS=http://+:10000`).

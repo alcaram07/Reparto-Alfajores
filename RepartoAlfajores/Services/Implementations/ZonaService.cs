@@ -29,7 +29,7 @@ public class ZonaService : IZonaService
     public async Task UpdateAsync(ZonaViewModel vm)
     {
         var zona = await _db.Zonas.FindAsync(vm.Id)
-            ?? throw new InvalidOperationException("Zona no encontrada");
+            ?? throw new NegocioException("Zona no encontrada");
         zona.Nombre = vm.Nombre.Trim();
         zona.Activa = vm.Activa;
         await _db.SaveChangesAsync();
@@ -38,7 +38,7 @@ public class ZonaService : IZonaService
     public async Task ToggleActivaAsync(int id)
     {
         var zona = await _db.Zonas.FindAsync(id)
-            ?? throw new InvalidOperationException("Zona no encontrada");
+            ?? throw new NegocioException("Zona no encontrada");
         zona.Activa = !zona.Activa;
         await _db.SaveChangesAsync();
     }

@@ -23,6 +23,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Necesario para construir a mano un ExceptionContext en los tests del filtro de errores. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\RepartoAlfajores\RepartoAlfajores.csproj" />
   </ItemGroup>
 

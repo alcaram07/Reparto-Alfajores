@@ -66,7 +66,7 @@ public class ClienteService : IClienteService
     public async Task UpdateAsync(ClienteViewModel vm)
     {
         var cliente = await _db.Clientes.FindAsync(vm.Id)
-            ?? throw new InvalidOperationException("Cliente no encontrado");
+            ?? throw new NegocioException("Cliente no encontrado");
         cliente.Nombre = vm.Nombre.Trim();
         cliente.Telefono = vm.Telefono?.Trim();
         cliente.Direccion = vm.Direccion?.Trim();

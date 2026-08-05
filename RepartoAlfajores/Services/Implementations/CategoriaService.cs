@@ -29,7 +29,7 @@ public class CategoriaService : ICategoriaService
     public async Task UpdateAsync(CategoriaViewModel vm)
     {
         var cat = await _db.CategoriaProductos.FindAsync(vm.Id)
-            ?? throw new InvalidOperationException("Categoría no encontrada");
+            ?? throw new NegocioException("Categoría no encontrada");
         cat.Nombre = vm.Nombre.Trim();
         await _db.SaveChangesAsync();
     }

@@ -4,7 +4,9 @@ services:
     runtime: docker
     dockerfilePath: ./RepartoAlfajores/Dockerfile
     dockerContext: .
-    plan: free
+    # El plan free suspende el servicio por inactividad y la primera carga tarda
+    # 50 s o más, inusable desde el celular en la calle.
+    plan: starter
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
         value: Production

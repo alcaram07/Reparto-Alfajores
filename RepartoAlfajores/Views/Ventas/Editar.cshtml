@@ -1,0 +1,29 @@
+@model VentaViewModel
+@{
+    ViewData["Title"] = "Editar venta";
+    ViewData["Accion"] = "Editar";
+}
+
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <h1><i class="bi bi-pencil-square me-2" style="color:var(--color-primary)"></i>Editar venta #@Model.Id</h1>
+    <a asp-action="Detalle" asp-route-id="@Model.Id" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-x-lg me-1"></i>Cancelar
+    </a>
+</div>
+
+@await Html.PartialAsync("_FormVenta", Model)
+
+@section Scripts {
+<script>
+    const productPrices = @Html.Raw(Model.ProductosPreciosJson);
+    const productNames = {};
+    @foreach (var p in Model.Productos)
+    {
+        @:productNames[@p.Value] = '@p.Text.Replace("'", "\\'")';
+    }
+    // Llevan el precio congelado de la venta, no el del catálogo: si el producto aumentó
+    // después, el total que se ve acá sigue siendo el que se cobró.
+    window.initialItems = @Html.Raw(Model.ItemsJson);
+</script>
+<script src="~/js/venta-form.js"></script>
+}

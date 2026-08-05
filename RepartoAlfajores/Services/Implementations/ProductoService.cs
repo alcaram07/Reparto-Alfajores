@@ -48,7 +48,7 @@ public class ProductoService : IProductoService
     public async Task UpdateAsync(ProductoViewModel vm)
     {
         var producto = await _db.Productos.FindAsync(vm.Id)
-            ?? throw new InvalidOperationException("Producto no encontrado");
+            ?? throw new NegocioException("Producto no encontrado");
         producto.Nombre = vm.Nombre.Trim();
         producto.CategoriaId = vm.CategoriaId;
         producto.PrecioUnitario = vm.PrecioUnitario;
@@ -59,7 +59,7 @@ public class ProductoService : IProductoService
     public async Task ToggleActivoAsync(int id)
     {
         var producto = await _db.Productos.FindAsync(id)
-            ?? throw new InvalidOperationException("Producto no encontrado");
+            ?? throw new NegocioException("Producto no encontrado");
         producto.Activo = !producto.Activo;
         await _db.SaveChangesAsync();
     }

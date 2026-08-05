@@ -1,0 +1,65 @@
+name: Backup de la base
+
+# Neon retiene poco historial (6 h en plan free, 1 día en los pagos), así que su
+# restore point-in-time no alcanza como única red: un error del viernes se detecta
+# el lunes. Este workflow guarda un dump propio, fuera de Neon.
+on:
+  schedule:
+    # 09:00 UTC = 06:00 en Argentina, antes de que arranque el reparto.
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Instalar pg_dump 17
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+            https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Generar el dump
+        env:
+          # Secret del repo. Conviene usar un rol de Neon de solo lectura,
+          # distinto del que usa la app.
+          PGURL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          if [ -z "$PGURL" ]; then
+            echo "Falta el secret BACKUP_DATABASE_URL" >&2
+            exit 1
+          fi
+          nombre="reparto-$(date -u +%Y%m%d-%H%M).dump"
+          echo "nombre=$nombre" >> "$GITHUB_ENV"
+          pg_dump --format=custom --no-owner --no-privileges --file="$nombre" "$PGURL"
+
+      - name: Verificar que el dump no viene vacío
+        run: |
+          # Umbral bajo a propósito: un dump con el esquema y pocos datos ronda los 24 kB,
+          # así que un piso más alto daría falsos negativos. Acá sólo se descarta el caso
+          # degenerado (dump de unos cientos de bytes, que restaura en silencio sin nada).
+          bytes=$(stat -c%s "$nombre")
+          echo "Tamaño: $bytes bytes"
+          if [ "$bytes" -lt 5000 ]; then
+            echo "El dump es sospechosamente chico; puede estar incompleto." >&2
+            exit 1
+          fi
+          # pg_restore -l falla si el archivo está corrupto.
+          tablas=$(pg_restore -l "$nombre" | grep -c "TABLE DATA" || true)
+          echo "Tablas con datos: $tablas"
+          if [ "$tablas" -lt 5 ]; then
+            echo "Se esperaban al menos 5 tablas con datos." >&2
+            exit 1
+          fi
+
+      - name: Guardar el dump
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.nombre }}
+          path: ${{ env.nombre }}
+          retention-days: 90

@@ -98,13 +98,25 @@
             </div>
         </div>
 
-        <!-- Cobros de hoy -->
+        <!-- Cobros del día -->
         <div class="card">
-            <div class="card-header"><i class="bi bi-clock-history me-1"></i> Cobros de hoy</div>
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <span>
+                    <i class="bi bi-clock-history me-1"></i>
+                    @(ViewBag.EsHoy == true ? "Cobros de hoy" : "Cobros del día")
+                </span>
+                <form method="get" class="d-flex align-items-center gap-2">
+                    <input type="date" name="fecha" value="@ViewBag.Fecha"
+                           class="form-control form-control-sm" style="width:auto"
+                           onchange="this.form.submit()" />
+                </form>
+            </div>
             <div class="card-body p-0">
                 @if (!cobrosHoy.Any())
                 {
-                    <div class="text-center text-muted py-3" style="font-size:0.85rem">Sin cobros hoy</div>
+                    <div class="text-center text-muted py-3" style="font-size:0.85rem">
+                        Sin cobros @(ViewBag.EsHoy == true ? "hoy" : "ese día")
+                    </div>
                 }
                 else
                 {
@@ -119,6 +131,15 @@
                                 <div class="d-flex align-items-center gap-2">
                                     <small class="text-muted">@c.Fecha.ALocal().ToString("HH:mm")</small>
                                     <span class="fw-bold" style="color:var(--color-success)">$@Fmt(c.Monto)</span>
+                                    <form asp-action="Eliminar" method="post" class="d-inline"
+                                          onsubmit="return confirm('¿Eliminar este cobro de $@Fmt(c.Monto) a @c.Cliente?.Nombre? La deuda del cliente va a volver a subir.')">
+                                        <input type="hidden" name="id" value="@c.Id" />
+                                        <input type="hidden" name="fecha" value="@ViewBag.Fecha" />
+                                        <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-1"
+                                                title="Eliminar cobro">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
                                 </div>
                             </li>
                         }
@@ -133,11 +154,11 @@
         <div class="card sticky-top" style="top:20px">
             <div class="card-header"><i class="bi bi-cash-coin me-1"></i> Registrar cobro</div>
             <div class="card-body">
-                <form asp-action="Registrar" method="post">
+                <form asp-action="Registrar" method="post" id="formCobro">
                     @Html.AntiForgeryToken()
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Cliente *</label>
-                        <select name="ClienteId" class="form-select" required>
+                        <select name="ClienteId" id="cobroCliente" class="form-select" required>
                             <option value="0">-- Seleccioná un cliente --</option>
                             @foreach (var item in vmCobro.Clientes)
                             {
@@ -151,12 +172,19 @@
                                 }
                             }
                         </select>
+                        <div id="saldoCliente" class="mt-2 d-none" style="font-size:0.87rem">
+                            <span class="text-muted">Debe</span>
+                            <span class="fw-bold" id="saldoMonto"></span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-2"
+                                    id="btnSaldarTodo">Saldar todo</button>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Monto *</label>
                         <div class="input-group">
                             <span class="input-group-text">$</span>
-                            <input name="Monto" type="number" step="0.01" min="0.01" class="form-control" placeholder="0.00" required />
+                            <input name="Monto" id="cobroMonto" type="number" step="0.01" min="0.01"
+                                   max="10000000" class="form-control" placeholder="0.00" required />
                         </div>
                     </div>
                     <div class="mb-3">
@@ -186,3 +214,47 @@
         </div>
     </div>
 </div>
+
+@section Scripts {
+<script>
+    // clienteId -> saldo adeudado. Sólo trae a los que deben algo.
+    const saldos = @Html.Raw(ViewBag.SaldosJson);
+
+    const selectCliente = document.getElementById('cobroCliente');
+    const inputMonto = document.getElementById('cobroMonto');
+    const cajaSaldo = document.getElementById('saldoCliente');
+    const textoSaldo = document.getElementById('saldoMonto');
+    const btnSaldar = document.getElementById('btnSaldarTodo');
+
+    function saldoActual() {
+        return saldos[selectCliente.value] ?? 0;
+    }
+
+    function mostrarSaldo() {
+        const saldo = saldoActual();
+        if (saldo > 0) {
+            textoSaldo.textContent = '$' + saldo.toLocaleString('es-AR', { minimumFractionDigits: 2 });
+            cajaSaldo.classList.remove('d-none');
+        } else {
+            cajaSaldo.classList.add('d-none');
+        }
+    }
+
+    selectCliente.addEventListener('change', mostrarSaldo);
+    btnSaldar.addEventListener('click', () => { inputMonto.value = saldoActual().toFixed(2); });
+    mostrarSaldo();
+
+    // El sobrepago es válido —queda como crédito a favor— pero casi siempre es un error
+    // de tipeo, así que se confirma en vez de bloquearlo.
+    document.getElementById('formCobro').addEventListener('submit', (e) => {
+        const saldo = saldoActual();
+        const monto = parseFloat(inputMonto.value || '0');
+        if (saldo > 0 && monto > saldo) {
+            const favor = (monto - saldo).toLocaleString('es-AR', { minimumFractionDigits: 2 });
+            if (!confirm(`El cobro supera la deuda. El cliente queda con $${favor} a favor. ¿Confirmar?`)) {
+                e.preventDefault();
+            }
+        }
+    });
+</script>
+}

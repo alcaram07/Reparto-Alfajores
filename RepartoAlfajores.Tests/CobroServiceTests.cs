@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RepartoAlfajores.Models;
+using RepartoAlfajores.Services;
 using RepartoAlfajores.Services.Interfaces;
 using RepartoAlfajores.ViewModels;
 
@@ -110,7 +111,7 @@ public class CobroServiceTests : DbTestBase
     {
         await using var db = Fixture.CreateContext();
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+        var ex = await Assert.ThrowsAsync<NegocioException>(
             () => NuevoCobro(db).CreateAsync(NuevoCobroVm(100m, clienteId: 999_999)));
 
         Assert.Contains("no existe", ex.Message, StringComparison.OrdinalIgnoreCase);
@@ -123,7 +124,7 @@ public class CobroServiceTests : DbTestBase
     {
         await using var db = Fixture.CreateContext();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<NegocioException>(
             () => NuevoCobro(db).CreateAsync(NuevoCobroVm(monto)));
 
         await using var verificacion = Fixture.CreateContext();
@@ -161,6 +162,77 @@ public class CobroServiceTests : DbTestBase
         await using var verificacion = Fixture.CreateContext();
         Assert.False(await verificacion.Cobros.AnyAsync());
         Assert.Equal(1000m, await NuevoCuentaCorriente(verificacion).GetSaldoAsync(Datos.ClienteId));
+    }
+
+    [Fact]
+    public async Task Eliminar_un_cobro_devuelve_la_deuda_al_valor_previo()
+    {
+        await using var db = Fixture.CreateContext();
+        await NuevaVenta(db).CreateAsync(VentaCC(2)); // deuda 1000
+        var service = NuevoCobro(db);
+        var cobro = await service.CreateAsync(NuevoCobroVm(400m));
+        Assert.Equal(600m, await NuevoCuentaCorriente(db).GetSaldoAsync(Datos.ClienteId));
+
+        Assert.True(await service.DeleteAsync(cobro.Id));
+
+        await using var verificacion = Fixture.CreateContext();
+        Assert.False(await verificacion.Cobros.AnyAsync(c => c.Id == cobro.Id));
+        Assert.False(await verificacion.MovimientosCC.AnyAsync(m => m.CobroId == cobro.Id));
+        Assert.Equal(1000m, await NuevoCuentaCorriente(verificacion).GetSaldoAsync(Datos.ClienteId));
+    }
+
+    /// <summary>
+    /// Al sacar un abono del medio, los saldos posteriores quedan calculados sobre un pago
+    /// que ya no existe.
+    /// </summary>
+    [Fact]
+    public async Task Eliminar_un_cobro_del_medio_recalcula_la_cadena()
+    {
+        await using var db = Fixture.CreateContext();
+        await NuevaVenta(db).CreateAsync(VentaCC(2)); // cargo 1000
+        var service = NuevoCobro(db);
+        var primero = await service.CreateAsync(NuevoCobroVm(300m)); // saldo 700
+        await service.CreateAsync(NuevoCobroVm(200m));               // saldo 500
+
+        Assert.True(await service.DeleteAsync(primero.Id));
+
+        await using var verificacion = Fixture.CreateContext();
+        var saldos = await verificacion.MovimientosCC
+            .Where(m => m.ClienteId == Datos.ClienteId)
+            .OrderBy(m => m.Id)
+            .Select(m => m.SaldoAcumulado)
+            .ToListAsync();
+
+        Assert.Equal(new[] { 1000m, 800m }, saldos);
+        Assert.Equal(800m, await NuevoCuentaCorriente(verificacion).GetSaldoAsync(Datos.ClienteId));
+    }
+
+    [Fact]
+    public async Task Eliminar_un_cobro_inexistente_devuelve_false()
+    {
+        await using var db = Fixture.CreateContext();
+
+        Assert.False(await NuevoCobro(db).DeleteAsync(999_999));
+    }
+
+    [Fact]
+    public async Task Eliminar_un_cobro_no_altera_el_saldo_de_otro_cliente()
+    {
+        await using var db = Fixture.CreateContext();
+        var cc = NuevoCuentaCorriente(db);
+        var service = NuevoCobro(db);
+
+        await NuevaVenta(db).CreateAsync(VentaCC(2));                    // cliente 1 debe 1000
+        var cobro = await service.CreateAsync(NuevoCobroVm(400m));
+        await cc.RegistrarMovimientoAsync(                               // cliente 2 debe 800
+            Datos.ClienteId2, TipoMovimientoCC.Cargo, 800m, "Venta", DateTime.UtcNow);
+
+        await service.DeleteAsync(cobro.Id);
+
+        await using var verificacion = Fixture.CreateContext();
+        var ccVerif = NuevoCuentaCorriente(verificacion);
+        Assert.Equal(1000m, await ccVerif.GetSaldoAsync(Datos.ClienteId));
+        Assert.Equal(800m, await ccVerif.GetSaldoAsync(Datos.ClienteId2));
     }
 
     private sealed class CuentaCorrienteQueFallaAlRegistrar(ICuentaCorrienteService inner)

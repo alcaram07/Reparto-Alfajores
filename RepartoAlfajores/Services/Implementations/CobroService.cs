@@ -32,10 +32,10 @@ public class CobroService : ICobroService
     {
         var clienteExiste = await _db.Clientes.AnyAsync(c => c.Id == vm.ClienteId);
         if (!clienteExiste)
-            throw new InvalidOperationException("El cliente indicado no existe.");
+            throw new NegocioException("El cliente indicado no existe.");
 
         if (vm.Monto <= 0)
-            throw new InvalidOperationException("El monto del cobro debe ser mayor a cero.");
+            throw new NegocioException("El monto del cobro debe ser mayor a cero.");
 
         var cobro = new Cobro
         {
@@ -67,6 +67,37 @@ public class CobroService : ICobroService
         });
 
         return cobro;
+    }
+
+    public async Task<bool> DeleteAsync(int id)
+    {
+        var strategy = _db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await _db.Database.BeginTransactionAsync();
+
+            var cobro = await _db.Cobros.FirstOrDefaultAsync(c => c.Id == id);
+            if (cobro == null) return false;
+
+            var clienteId = cobro.ClienteId;
+            await _cuentaCorriente.BloquearClienteAsync(clienteId);
+
+            // MovimientosCC referencia el cobro con FK Restrict: sin borrar el abono primero,
+            // Postgres rechaza el DELETE.
+            var movimiento = await _db.MovimientosCC.FirstOrDefaultAsync(m => m.CobroId == id);
+            if (movimiento != null)
+                _db.MovimientosCC.Remove(movimiento);
+
+            _db.Cobros.Remove(cobro);
+            await _db.SaveChangesAsync();
+
+            // El abono sale del medio de la cadena, así que los saldos posteriores quedan
+            // calculados sobre un pago que ya no existe.
+            await _cuentaCorriente.RecalcularSaldosAsync(clienteId);
+
+            await tx.CommitAsync();
+            return true;
+        });
     }
 
     public async Task<IEnumerable<DeudorViewModel>> GetDeudoresAsync()

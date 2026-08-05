@@ -23,4 +23,10 @@ public class VentaViewModel
     public IEnumerable<SelectListItem> Clientes { get; set; } = new List<SelectListItem>();
     public IEnumerable<SelectListItem> Productos { get; set; } = new List<SelectListItem>();
     public string ProductosPreciosJson { get; set; } = "{}";
+
+    /// <summary>
+    /// Líneas ya cargadas, para sembrar el formulario al editar. Llevan el precio congelado
+    /// de la venta, que puede diferir del precio actual del catálogo.
+    /// </summary>
+    public string ItemsJson { get; set; } = "[]";
 }
