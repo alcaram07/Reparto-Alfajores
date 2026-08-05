@@ -37,11 +37,11 @@ public class ManejadorDeErroresFilterTests
     }
 
     [Fact]
-    public void Una_regla_de_negocio_redirige_al_index_con_el_mensaje()
+    public async Task Una_regla_de_negocio_redirige_al_index_con_el_mensaje()
     {
         var contexto = CrearContexto(new NegocioException("Producto 999 no encontrado"));
 
-        CrearFiltro().OnExceptionAsync(contexto).Wait();
+        await CrearFiltro().OnExceptionAsync(contexto);
 
         Assert.True(contexto.ExceptionHandled);
         var redirect = Assert.IsType<RedirectToActionResult>(contexto.Result);
@@ -55,47 +55,47 @@ public class ManejadorDeErroresFilterTests
     /// validación. Si el filtro se lo tragara, un bug real pasaría desapercibido.
     /// </summary>
     [Fact]
-    public void Una_excepcion_de_infraestructura_no_se_captura()
+    public async Task Una_excepcion_de_infraestructura_no_se_captura()
     {
         var contexto = CrearContexto(new InvalidOperationException("se cayó la conexión"));
 
-        CrearFiltro().OnExceptionAsync(contexto).Wait();
+        await CrearFiltro().OnExceptionAsync(contexto);
 
         Assert.False(contexto.ExceptionHandled);
         Assert.Null(contexto.Result);
     }
 
     [Fact]
-    public void Una_peticion_que_espera_json_recibe_json_y_no_un_redirect()
+    public async Task Una_peticion_que_espera_json_recibe_json_y_no_un_redirect()
     {
         var contexto = CrearContexto(
             new NegocioException("No se pudo interpretar el audio"),
             accept: "application/json");
 
-        CrearFiltro().OnExceptionAsync(contexto).Wait();
+        await CrearFiltro().OnExceptionAsync(contexto);
 
         Assert.True(contexto.ExceptionHandled);
         Assert.IsType<JsonResult>(contexto.Result);
     }
 
     [Fact]
-    public void Una_peticion_ajax_recibe_json_y_no_un_redirect()
+    public async Task Una_peticion_ajax_recibe_json_y_no_un_redirect()
     {
         var contexto = CrearContexto(new NegocioException("error"));
         contexto.HttpContext.Request.Headers["X-Requested-With"] = "XMLHttpRequest";
 
-        CrearFiltro().OnExceptionAsync(contexto).Wait();
+        await CrearFiltro().OnExceptionAsync(contexto);
 
         Assert.IsType<JsonResult>(contexto.Result);
     }
 
     [Fact]
-    public void Sin_controller_en_la_ruta_se_redirige_a_Home()
+    public async Task Sin_controller_en_la_ruta_se_redirige_a_Home()
     {
         var contexto = CrearContexto(new NegocioException("error"), controller: null!);
         contexto.RouteData.Values.Remove("controller");
 
-        CrearFiltro().OnExceptionAsync(contexto).Wait();
+        await CrearFiltro().OnExceptionAsync(contexto);
 
         var redirect = Assert.IsType<RedirectToActionResult>(contexto.Result);
         Assert.Equal("Home", redirect.ControllerName);
