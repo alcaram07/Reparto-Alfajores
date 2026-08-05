@@ -26,6 +26,15 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           sudo apt-get update
           sudo apt-get install -y postgresql-client-18
+          # El runner ya trae PostgreSQL 16 y su pg_dump gana en el PATH, así que sin esto
+          # se ejecuta el 16 y falla contra Neon 18. Los binarios nuevos quedan acá.
+          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
+
+      - name: Verificar que se usa el cliente correcto
+        run: |
+          echo "pg_dump:    $(which pg_dump)"
+          pg_dump --version
+          pg_restore --version
 
       - name: Generar el dump
         env:
