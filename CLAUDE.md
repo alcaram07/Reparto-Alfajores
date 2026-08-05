@@ -140,6 +140,11 @@ Los datos son de plata: antes de tocar nada que escriba en `Ventas`, `Cobros` o
    mano desde Actions → *Backup de la base* → *Run workflow*. Requiere el secret
    `BACKUP_DATABASE_URL` en el repo, idealmente con un rol de Neon de solo lectura.
 
+**Ojo con la versión de PostgreSQL.** Neon corre **18.x**, y tanto `pg_dump` como `pg_restore`
+se niegan a trabajar con una base de versión mayor que ellos. El cliente local que viene con
+PostgreSQL 17 **no puede** volcar ni restaurar estos dumps: hace falta el 18 o superior. Es lo
+mismo que fija la versión del paquete en el workflow.
+
 **Restaurar un dump:**
 
 ```bash
