@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using RepartoAlfajores.Data;
 using RepartoAlfajores.Filters;
@@ -38,6 +40,31 @@ builder.Services.AddDbContext<AppDbContext>(options =>
             maxRetryDelay: TimeSpan.FromSeconds(10),
             errorCodesToAdd: null)));
 
+// Render termina TLS en su proxy y reenvía la request como HTTP. Sin esto, la app se cree
+// en texto plano: la cookie de sesión sale sin la marca Secure y UseHttpsRedirection queda
+// desorientado. Sólo se confían los headers del proxy (KnownNetworks/KnownProxies se vacían
+// porque la IP del proxy de Render no es fija).
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedFor;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
+// Un solo usuario: se limita el endpoint entero en vez de particionar por IP. Detrás del
+// proxy, RemoteIpAddress es la del proxy, así que particionar por IP daría un límite falso
+// —o bypasseable falsificando X-Forwarded-For—.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddFixedWindowLimiter("login", limiter =>
+    {
+        limiter.Window = TimeSpan.FromMinutes(5);
+        limiter.PermitLimit = 10;
+        limiter.QueueLimit = 0;
+    });
+});
+
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -46,7 +73,12 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.ExpireTimeSpan = TimeSpan.FromHours(8);
         options.SlidingExpiration = true;
         options.Cookie.HttpOnly = true;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        // En producción siempre Secure: con UseForwardedHeaders la app ya sabe que la request
+        // original fue HTTPS. En desarrollo se sirve por HTTP plano, así que forzarlo dejaría
+        // la sesión sin cookie.
+        options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+            ? CookieSecurePolicy.SameAsRequest
+            : CookieSecurePolicy.Always;
         options.Cookie.SameSite = SameSiteMode.Strict;
     });
 
@@ -93,6 +125,9 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// Primero de todo: el resto del pipeline necesita saber que la request original fue HTTPS.
+app.UseForwardedHeaders();
+
 app.Use(async (context, next) =>
 {
     context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
@@ -126,6 +161,7 @@ app.UseStatusCodePagesWithReExecute("/Home/Error", "?code={0}");
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
