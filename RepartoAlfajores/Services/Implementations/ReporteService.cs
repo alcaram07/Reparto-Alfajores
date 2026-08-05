@@ -10,7 +10,13 @@ namespace RepartoAlfajores.Services.Implementations;
 public class ReporteService : IReporteService
 {
     private readonly AppDbContext _db;
-    public ReporteService(AppDbContext db) => _db = db;
+    private readonly ICuentaCorrienteService _cuentaCorriente;
+
+    public ReporteService(AppDbContext db, ICuentaCorrienteService cuentaCorriente)
+    {
+        _db = db;
+        _cuentaCorriente = cuentaCorriente;
+    }
 
     public async Task<ReporteViewModel> GetReporteAsync(DateTime desde, DateTime hasta)
     {
@@ -30,9 +36,15 @@ public class ReporteService : IReporteService
         var cantidadVentas = ventas.Count;
         var ticketPromedio = cantidadVentas > 0 ? totalVendido / cantidadVentas : 0;
         var totalCobrado = cobros.Sum(c => c.Monto);
-        var totalPendiente = ventas
-            .Where(v => v.EstadoCobro == EstadoCobro.CuentaCorriente)
-            .Sum(v => v.Total) - cobros.Sum(c => c.Monto);
+
+        // Deuda vigente de todos los clientes, no un cálculo acotado al período: antes se
+        // restaban todos los cobros del rango a las ventas en cuenta corriente del rango, así
+        // que un pago de una deuda vieja descontaba ventas nuevas y el número daba cualquier
+        // cosa (y el Math.Max escondía los negativos). Los cobros no están atados a ventas
+        // puntuales, así que "lo pendiente de este período" no es calculable; lo que sí tiene
+        // sentido —y es lo que se quiere saber— es cuánto se adeuda hoy.
+        var saldos = await _cuentaCorriente.GetSaldosAsync();
+        var totalPendiente = saldos.Values.Where(s => s > 0).Sum();
 
         var ventasDia = ventas
             // Agrupado por día del calendario argentino, no por día UTC.
@@ -92,7 +104,7 @@ public class ReporteService : IReporteService
             CantidadVentas = cantidadVentas,
             TicketPromedio = ticketPromedio,
             TotalCobrado = totalCobrado,
-            TotalPendiente = Math.Max(0, totalPendiente),
+            TotalPendiente = totalPendiente,
             VentasDia = ventasDia,
             VentasPorZona = ventasPorZona,
             TopProductos = topProductos,

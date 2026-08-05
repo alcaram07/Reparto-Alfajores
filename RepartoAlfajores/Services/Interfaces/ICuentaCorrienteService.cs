@@ -12,6 +12,23 @@ public interface ICuentaCorrienteService
     Task<decimal> GetSaldoAsync(int clienteId);
 
     /// <summary>
+    /// Saldo de todos los clientes que tienen movimientos, en una sola consulta. Los que no
+    /// aparecen en el diccionario están en cero.
+    /// </summary>
+    /// <remarks>
+    /// Existe para no llamar a <see cref="GetSaldoAsync"/> dentro de un bucle: con la base en
+    /// otra región, cada consulta suelta cuesta una ida y vuelta de red.
+    /// </remarks>
+    Task<Dictionary<int, decimal>> GetSaldosAsync();
+
+    /// <summary>
+    /// Desde cuándo cada cliente arrastra su deuda actual: la fecha del primer movimiento
+    /// posterior a la última vez que su saldo quedó en cero o a favor. Sólo incluye a los que
+    /// hoy deben algo.
+    /// </summary>
+    Task<Dictionary<int, DateTime>> GetInicioDeudaAsync();
+
+    /// <summary>
     /// Serializa las operaciones sobre la cuenta de un cliente. Debe llamarse dentro de una
     /// transacción, antes de leer el saldo, para que dos operaciones simultáneas no partan
     /// del mismo saldo previo y se pisen.

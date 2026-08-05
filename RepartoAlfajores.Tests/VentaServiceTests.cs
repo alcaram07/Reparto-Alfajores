@@ -394,6 +394,10 @@ public class VentaServiceTests : DbTestBase
     {
         public Task<decimal> GetSaldoAsync(int clienteId) => inner.GetSaldoAsync(clienteId);
 
+        public Task<Dictionary<int, decimal>> GetSaldosAsync() => inner.GetSaldosAsync();
+
+        public Task<Dictionary<int, DateTime>> GetInicioDeudaAsync() => inner.GetInicioDeudaAsync();
+
         public Task BloquearClienteAsync(int clienteId) => inner.BloquearClienteAsync(clienteId);
 
         public Task RecalcularSaldosAsync(int clienteId) => inner.RecalcularSaldosAsync(clienteId);

@@ -102,20 +102,12 @@ public class CobroService : ICobroService
 
     public async Task<IEnumerable<DeudorViewModel>> GetDeudoresAsync()
     {
-        // Saldo actual = SaldoAcumulado del último movimiento por cliente
-        var saldosPorCliente = await _db.MovimientosCC
-            .GroupBy(m => m.ClienteId)
-            .Select(g => new
-            {
-                ClienteId = g.Key,
-                Saldo = g.OrderByDescending(m => m.Id).First().SaldoAcumulado
-            })
-            .Where(x => x.Saldo > 0)
-            .ToListAsync();
+        var saldos = await _cuentaCorriente.GetSaldosAsync();
+        var deudores = saldos.Where(s => s.Value > 0).ToList();
 
-        if (!saldosPorCliente.Any()) return [];
+        if (deudores.Count == 0) return [];
 
-        var clienteIds = saldosPorCliente.Select(x => x.ClienteId).ToList();
+        var clienteIds = deudores.Select(d => d.Key).ToList();
 
         var clientes = await _db.Clientes
             .Include(c => c.Zona)
@@ -128,41 +120,40 @@ public class CobroService : ICobroService
             .Select(g => new { ClienteId = g.Key, UltimoPago = g.Max(c => c.Fecha) })
             .ToListAsync();
 
-        var primerasVentasCC = await _db.Ventas
-            .Where(v => v.EstadoCobro == EstadoCobro.CuentaCorriente && clienteIds.Contains(v.ClienteId))
-            .GroupBy(v => v.ClienteId)
-            .Select(g => new { ClienteId = g.Key, Primera = g.Min(v => v.Fecha) })
-            .ToListAsync();
+        // Antes se medía desde la primera venta en cuenta corriente de toda la historia, aunque
+        // estuviera paga: un cliente que compra a cuenta hace un año y paga puntual figuraba con
+        // "365 días". Ahora se mide desde que arrancó la deuda que sigue abierta.
+        var inicioDeuda = await _cuentaCorriente.GetInicioDeudaAsync();
+        var ahora = DateTime.UtcNow;
 
-        var deudores = saldosPorCliente.Select(x =>
+        var resultado = deudores.Select(d =>
         {
-            var cliente = clientes.First(c => c.Id == x.ClienteId);
-            var primeraVenta = primerasVentasCC.FirstOrDefault(p => p.ClienteId == x.ClienteId);
-            var dias = primeraVenta != null ? (DateTime.UtcNow - primeraVenta.Primera).Days : 0;
-            var ultimoPago = ultimosPagos.FirstOrDefault(u => u.ClienteId == x.ClienteId)?.UltimoPago;
+            var cliente = clientes.First(c => c.Id == d.Key);
+            var dias = inicioDeuda.TryGetValue(d.Key, out var desde)
+                ? Math.Max(0, (ahora - desde).Days)
+                : 0;
 
             return new DeudorViewModel
             {
-                ClienteId = x.ClienteId,
+                ClienteId = d.Key,
                 Nombre = cliente.Nombre,
                 Zona = cliente.Zona.Nombre,
-                Saldo = x.Saldo,
+                Saldo = d.Value,
                 DiasDeuda = dias,
-                UltimoPago = ultimoPago
+                UltimoPago = ultimosPagos.FirstOrDefault(u => u.ClienteId == d.Key)?.UltimoPago
             };
         });
 
-        return deudores.OrderByDescending(d => d.DiasDeuda);
+        return resultado.OrderByDescending(d => d.DiasDeuda);
     }
 
-    public async Task<decimal> GetTotalPorCobrarAsync() =>
-        await _db.MovimientosCC
-            .GroupBy(m => m.ClienteId)
-            .Select(g => g.OrderByDescending(m => m.Id).First().SaldoAcumulado)
-            // Sólo los saldos deudores: un cliente con crédito a favor no debe
-            // descontar de lo que el resto adeuda.
-            .Where(s => s > 0)
-            .SumAsync(s => (decimal?)s) ?? 0m;
+    public async Task<decimal> GetTotalPorCobrarAsync()
+    {
+        var saldos = await _cuentaCorriente.GetSaldosAsync();
+        // Sólo los saldos deudores: un cliente con crédito a favor no debe descontar de lo
+        // que el resto adeuda.
+        return saldos.Values.Where(s => s > 0).Sum();
+    }
 
     public async Task<decimal> GetTotalCobradoHoyAsync()
     {

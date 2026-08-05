@@ -125,6 +125,94 @@ public class CuentaCorrienteServiceTests : DbTestBase
     }
 
     [Fact]
+    public async Task Los_saldos_de_todos_los_clientes_se_traen_en_una_consulta()
+    {
+        await using var db = Fixture.CreateContext();
+        var cc = NuevoCuentaCorriente(db);
+
+        await cc.RegistrarMovimientoAsync(Datos.ClienteId, TipoMovimientoCC.Cargo, 1000m, "V1", DateTime.UtcNow);
+        await cc.RegistrarMovimientoAsync(Datos.ClienteId, TipoMovimientoCC.Abono, 400m, "C1", DateTime.UtcNow);
+        await cc.RegistrarMovimientoAsync(Datos.ClienteId2, TipoMovimientoCC.Cargo, 250m, "V2", DateTime.UtcNow);
+
+        var saldos = await cc.GetSaldosAsync();
+
+        Assert.Equal(600m, saldos[Datos.ClienteId]);
+        Assert.Equal(250m, saldos[Datos.ClienteId2]);
+    }
+
+    [Fact]
+    public async Task Un_cliente_sin_movimientos_no_aparece_en_los_saldos()
+    {
+        await using var db = Fixture.CreateContext();
+
+        Assert.Empty(await NuevoCuentaCorriente(db).GetSaldosAsync());
+    }
+
+    /// <summary>
+    /// Regresión: se medía desde la primera venta en cuenta corriente de toda la historia,
+    /// aunque estuviera paga, así que un cliente puntual figuraba con cientos de días.
+    /// </summary>
+    [Fact]
+    public async Task La_deuda_se_cuenta_desde_que_el_saldo_dejo_de_estar_en_cero()
+    {
+        await using var db = Fixture.CreateContext();
+        var cc = NuevoCuentaCorriente(db);
+
+        var hace100dias = DateTime.UtcNow.AddDays(-100);
+        var hace90dias = DateTime.UtcNow.AddDays(-90);
+        var hace10dias = DateTime.UtcNow.AddDays(-10);
+
+        // Compró hace 100 días y pagó todo hace 90: esa deuda ya está cerrada.
+        await cc.RegistrarMovimientoAsync(Datos.ClienteId, TipoMovimientoCC.Cargo, 1000m, "V1", hace100dias);
+        await cc.RegistrarMovimientoAsync(Datos.ClienteId, TipoMovimientoCC.Abono, 1000m, "C1", hace90dias);
+        // La deuda vigente arranca acá.
+        await cc.RegistrarMovimientoAsync(Datos.ClienteId, TipoMovimientoCC.Cargo, 500m, "V2", hace10dias);
+
+        var inicio = await cc.GetInicioDeudaAsync();
+
+        Assert.Equal(hace10dias.Date, inicio[Datos.ClienteId].Date);
+    }
+
+    [Fact]
+    public async Task Un_cliente_que_nunca_salda_cuenta_desde_su_primer_cargo()
+    {
+        await using var db = Fixture.CreateContext();
+        var cc = NuevoCuentaCorriente(db);
+
+        var hace30dias = DateTime.UtcNow.AddDays(-30);
+        await cc.RegistrarMovimientoAsync(Datos.ClienteId, TipoMovimientoCC.Cargo, 1000m, "V1", hace30dias);
+        await cc.RegistrarMovimientoAsync(Datos.ClienteId, TipoMovimientoCC.Abono, 300m, "C1", DateTime.UtcNow);
+
+        var inicio = await cc.GetInicioDeudaAsync();
+
+        Assert.Equal(hace30dias.Date, inicio[Datos.ClienteId].Date);
+    }
+
+    [Fact]
+    public async Task Un_cliente_al_dia_no_tiene_inicio_de_deuda()
+    {
+        await using var db = Fixture.CreateContext();
+        var cc = NuevoCuentaCorriente(db);
+
+        await cc.RegistrarMovimientoAsync(Datos.ClienteId, TipoMovimientoCC.Cargo, 500m, "V1", DateTime.UtcNow.AddDays(-5));
+        await cc.RegistrarMovimientoAsync(Datos.ClienteId, TipoMovimientoCC.Abono, 500m, "C1", DateTime.UtcNow);
+
+        Assert.DoesNotContain(Datos.ClienteId, (await cc.GetInicioDeudaAsync()).Keys);
+    }
+
+    [Fact]
+    public async Task Un_cliente_con_credito_a_favor_no_tiene_inicio_de_deuda()
+    {
+        await using var db = Fixture.CreateContext();
+        var cc = NuevoCuentaCorriente(db);
+
+        await cc.RegistrarMovimientoAsync(Datos.ClienteId, TipoMovimientoCC.Cargo, 500m, "V1", DateTime.UtcNow.AddDays(-5));
+        await cc.RegistrarMovimientoAsync(Datos.ClienteId, TipoMovimientoCC.Abono, 800m, "C1", DateTime.UtcNow);
+
+        Assert.DoesNotContain(Datos.ClienteId, (await cc.GetInicioDeudaAsync()).Keys);
+    }
+
+    [Fact]
     public async Task Recalcular_sobre_un_cliente_sin_movimientos_no_falla()
     {
         await using var db = Fixture.CreateContext();
