@@ -41,14 +41,18 @@ public class VentasController : Controller
 
     public async Task<IActionResult> Nuevo()
     {
-        var precios = await _productoService.GetPreciosDictionaryAsync();
-        var vm = new VentaViewModel
-        {
-            Clientes = await _clienteService.GetSelectListAsync(),
-            Productos = await _productoService.GetSelectListActivosAsync(),
-            ProductosPreciosJson = JsonSerializer.Serialize(precios)
-        };
+        var vm = new VentaViewModel();
+        await CompletarListasAsync(vm);
         return View(vm);
+    }
+
+    /// <summary>Carga los desplegables y los precios que el formulario necesita para renderizar.</summary>
+    private async Task CompletarListasAsync(VentaViewModel vm)
+    {
+        vm.Clientes = await _clienteService.GetSelectListAsync();
+        vm.Productos = await _productoService.GetSelectListActivosAsync();
+        vm.ProductosPreciosJson = JsonSerializer.Serialize(
+            await _productoService.GetPreciosDictionaryAsync());
     }
 
     [HttpPost]
@@ -59,10 +63,7 @@ public class VentasController : Controller
 
         if (!ModelState.IsValid)
         {
-            var precios = await _productoService.GetPreciosDictionaryAsync();
-            vm.Clientes = await _clienteService.GetSelectListAsync();
-            vm.Productos = await _productoService.GetSelectListActivosAsync();
-            vm.ProductosPreciosJson = JsonSerializer.Serialize(precios);
+            await CompletarListasAsync(vm);
             return View(vm);
         }
 
@@ -85,6 +86,68 @@ public class VentasController : Controller
 
         var resultado = await _ventaVozService.ProcesarAudioAsync(dataUri);
         return Json(resultado);
+    }
+
+    public async Task<IActionResult> Editar(int id)
+    {
+        var venta = await _ventaService.GetByIdAsync(id);
+        if (venta == null) return NotFound();
+
+        var vm = new VentaViewModel
+        {
+            Id = venta.Id,
+            ClienteId = venta.ClienteId,
+            Fecha = venta.Fecha,
+            MetodoPago = venta.MetodoPago,
+            Nota = venta.Nota,
+            Detalles = venta.Detalles.Select(d => new DetalleVentaViewModel
+            {
+                ProductoId = d.ProductoId,
+                Cantidad = d.Cantidad,
+                PrecioUnitario = d.PrecioUnitario
+            }).ToList()
+        };
+
+        await CompletarListasAsync(vm);
+        // Lleva el precio congelado de cada línea, no el actual del catálogo.
+        vm.ItemsJson = JsonSerializer.Serialize(venta.Detalles.Select(d => new
+        {
+            productId = d.ProductoId,
+            qty = d.Cantidad,
+            precio = d.PrecioUnitario,
+            nombre = d.Producto?.Nombre ?? $"Producto {d.ProductoId}"
+        }));
+
+        return View(vm);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Editar(VentaViewModel vm)
+    {
+        if (vm.Detalles == null || vm.Detalles.Count == 0)
+            ModelState.AddModelError("Detalles", "Agregue al menos un producto");
+
+        if (!ModelState.IsValid)
+        {
+            await CompletarListasAsync(vm);
+            vm.ItemsJson = JsonSerializer.Serialize(vm.Detalles?.Select(d => new
+            {
+                productId = d.ProductoId,
+                qty = d.Cantidad,
+                precio = d.PrecioUnitario,
+                nombre = d.ProductoNombre ?? $"Producto {d.ProductoId}"
+            }) ?? []);
+            return View(vm);
+        }
+
+        if (!await _ventaService.UpdateAsync(vm))
+        {
+            TempData["Error"] = "La venta no existe o fue eliminada";
+            return RedirectToAction(nameof(Index));
+        }
+
+        TempData["Success"] = "Venta actualizada correctamente";
+        return RedirectToAction(nameof(Detalle), new { id = vm.Id });
     }
 
     public async Task<IActionResult> Detalle(int id)

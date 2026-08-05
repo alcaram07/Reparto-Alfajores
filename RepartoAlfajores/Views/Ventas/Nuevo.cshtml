@@ -1,122 +1,14 @@
 @model VentaViewModel
 @{
     ViewData["Title"] = "Nueva venta";
+    ViewData["Accion"] = "Nuevo";
 }
 
 <div class="page-header">
     <h1><i class="bi bi-plus-circle me-2" style="color:var(--color-primary)"></i>Nueva venta</h1>
 </div>
 
-<div class="row g-3">
-    <div class="col-lg-7">
-        <div class="card">
-            <div class="card-body">
-                <form asp-action="Nuevo" method="post" id="ventaForm">
-                    @Html.AntiForgeryToken()
-                    <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 mb-3" style="font-size:0.85rem"></div>
-
-                    <!-- Paso 1: Cliente -->
-                    <div class="mb-4">
-                        <h6 class="fw-bold mb-2" style="color:var(--color-primary)">1. Seleccionar cliente</h6>
-                        <select asp-for="ClienteId" asp-items="Model.Clientes" class="form-select" id="clienteSelect">
-                            <option value="0">-- Seleccioná un cliente --</option>
-                        </select>
-                        <span asp-validation-for="ClienteId" class="text-danger" style="font-size:0.8rem"></span>
-                    </div>
-
-                    <!-- Cargar por voz (IA) -->
-                    <div class="mb-4 p-3 rounded" style="background:var(--color-primary-light)">
-                        <h6 class="fw-bold mb-2" style="color:var(--color-primary-dark)">
-                            <i class="bi bi-magic me-1"></i>Cargar por voz
-                        </h6>
-                        <p class="mb-2" style="font-size:0.8rem;color:var(--color-primary-dark)">
-                            Tocá el micrófono y dictá el pedido. Ej: "tres alfajores de maicena y dos de chocolate".
-                        </p>
-                        <div class="d-flex align-items-center gap-2 flex-wrap">
-                            <button type="button" id="btnGrabar" onclick="toggleRecording()" class="btn btn-primary">
-                                <i class="bi bi-mic-fill me-1"></i><span id="btnGrabarText">Grabar pedido</span>
-                            </button>
-                            <span id="recordingStatus" class="fw-semibold text-danger d-none" style="font-size:0.85rem">
-                                <span class="recording-dot me-1">●</span>Grabando… tocá Detener al terminar
-                            </span>
-                            <span id="vozProcesando" class="text-muted d-none" style="font-size:0.85rem">
-                                <span class="spinner-border spinner-border-sm me-1"></span>Procesando audio…
-                            </span>
-                        </div>
-                        <div id="vozAviso" class="mt-2 d-none" style="font-size:0.8rem"></div>
-                    </div>
-
-                    <!-- Paso 2: Productos -->
-                    <div class="mb-4">
-                        <h6 class="fw-bold mb-2" style="color:var(--color-primary)">2. Agregar productos</h6>
-                        <div class="d-flex gap-2 mb-2">
-                            <select id="productoSelect" class="form-select">
-                                <option value="">-- Producto --</option>
-                                @foreach (var p in Model.Productos)
-                                {
-                                    <option value="@p.Value">@p.Text</option>
-                                }
-                            </select>
-                            <input type="number" id="cantidadInput" class="form-control" style="max-width:90px" min="1" value="1" />
-                            <button type="button" class="btn btn-outline-primary" onclick="agregarProducto()">
-                                <i class="bi bi-plus"></i>
-                            </button>
-                        </div>
-                        <div id="detallesContainer"></div>
-                        <div id="detallesHidden"></div>
-                        @if (ViewData.ModelState.ContainsKey("Detalles") && ViewData.ModelState["Detalles"]!.Errors.Any())
-                        {
-                            <div class="text-danger" style="font-size:0.8rem">Agregue al menos un producto</div>
-                        }
-                    </div>
-
-                    <!-- Paso 3: Método de pago -->
-                    <div class="mb-4">
-                        <h6 class="fw-bold mb-2" style="color:var(--color-primary)">3. Forma de cobro</h6>
-                        <div class="d-flex gap-2 flex-wrap">
-                            @foreach (MetodoPago mp in Enum.GetValues(typeof(MetodoPago)))
-                            {
-                                <div class="form-check form-check-inline">
-                                    <input class="form-check-input" type="radio" name="MetodoPago"
-                                           id="mp_@mp" value="@((int)mp)"
-                                           @(mp == MetodoPago.Efectivo ? "checked" : "") />
-                                    <label class="form-check-label" for="mp_@mp">@mp</label>
-                                </div>
-                            }
-                        </div>
-                    </div>
-
-                    <div class="mb-4">
-                        <label class="form-label">Nota (opcional)</label>
-                        <input asp-for="Nota" class="form-control" placeholder="Observaciones..." />
-                    </div>
-
-                    <!-- Total -->
-                    <div class="d-flex justify-content-between align-items-center p-3 mb-3 rounded" style="background:var(--color-primary-light)">
-                        <span class="fw-bold" style="color:var(--color-primary-dark)">Total</span>
-                        <span class="fw-bold fs-4" style="color:var(--color-primary)" id="totalDisplay">$0,00</span>
-                    </div>
-
-                    <button type="submit" class="btn btn-primary w-100 btn-lg">
-                        <i class="bi bi-check-circle me-1"></i> Confirmar venta
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-lg-5">
-        <div class="card">
-            <div class="card-header">Resumen de ítems</div>
-            <div class="card-body p-0" id="resumenContainer">
-                <div class="text-center text-muted py-4" id="resumenVacio">
-                    <i class="bi bi-cart" style="font-size:2rem;opacity:0.2"></i>
-                    <p class="mt-2 mb-0" style="font-size:0.85rem">Sin productos agregados</p>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+@await Html.PartialAsync("_FormVenta", Model)
 
 <style>
     .recording-dot { display:inline-block; animation: blink 1s step-start infinite; }
@@ -125,76 +17,16 @@
 
 @section Scripts {
 <script>
-const productPrices = @Html.Raw(Model.ProductosPreciosJson);
-const productNames = {};
-@foreach (var p in Model.Productos)
-{
-    @:productNames[@p.Value] = '@p.Text.Replace("'", "\\'")';
-}
-
-let items = [];
-
-function agregarProducto() {
-    const sel = document.getElementById('productoSelect');
-    const productId = parseInt(sel.value);
-    if (!productId) return;
-    const qty = parseInt(document.getElementById('cantidadInput').value) || 1;
-    const precio = productPrices[productId] || 0;
-    const nombre = productNames[productId] || sel.options[sel.selectedIndex].text;
-
-    const existing = items.findIndex(i => i.productId === productId);
-    if (existing >= 0) {
-        items[existing].qty += qty;
-    } else {
-        items.push({ productId, qty, precio, nombre });
+    const productPrices = @Html.Raw(Model.ProductosPreciosJson);
+    const productNames = {};
+    @foreach (var p in Model.Productos)
+    {
+        @:productNames[@p.Value] = '@p.Text.Replace("'", "\\'")';
     }
-    renderItems();
-}
-
-function eliminarItem(idx) {
-    items.splice(idx, 1);
-    renderItems();
-}
-
-function renderItems() {
-    const container = document.getElementById('detallesContainer');
-    const hidden = document.getElementById('detallesHidden');
-    const resumen = document.getElementById('resumenContainer');
-    const vacio = document.getElementById('resumenVacio');
-
-    hidden.innerHTML = '';
-    items.forEach((item, i) => {
-        hidden.innerHTML += `<input type="hidden" name="Detalles[${i}].ProductoId" value="${item.productId}">`;
-        hidden.innerHTML += `<input type="hidden" name="Detalles[${i}].Cantidad" value="${item.qty}">`;
-    });
-
-    if (items.length === 0) {
-        if (vacio) vacio.style.display = '';
-        return;
-    }
-    if (vacio) vacio.style.display = 'none';
-
-    let tableHtml = '<table class="table table-hover mb-0" style="font-size:0.87rem"><tbody>';
-    items.forEach((item, i) => {
-        const subtotal = item.qty * item.precio;
-        tableHtml += `<tr>
-            <td>${item.nombre.split('(')[0].trim()}</td>
-            <td class="text-center">${item.qty}</td>
-            <td class="text-end fw-semibold">$${subtotal.toLocaleString('es-AR', {minimumFractionDigits:2})}</td>
-            <td><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="eliminarItem(${i})"><i class="bi bi-x"></i></button></td>
-        </tr>`;
-    });
-    tableHtml += '</tbody></table>';
-    resumen.innerHTML = tableHtml;
-
-    updateTotal();
-}
-
-function updateTotal() {
-    const total = items.reduce((s, i) => s + i.qty * i.precio, 0);
-    document.getElementById('totalDisplay').textContent = '$' + total.toLocaleString('es-AR', {minimumFractionDigits:2});
-}
-
+    window.initialItems = @Html.Raw(Model.ItemsJson);
+</script>
+<script src="~/js/venta-form.js"></script>
+<script>
 // ── Cargar por voz con IA ────────────────────────────────────────────────
 let mediaRecorder = null;
 let audioChunks = [];
@@ -208,74 +40,62 @@ async function toggleRecording() {
 async function startRecording() {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const mimeType = ['audio/webm', 'audio/ogg', 'audio/mp4'].find(t => MediaRecorder.isTypeSupported(t)) ?? '';
-        mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+        mediaRecorder = new MediaRecorder(stream);
         audioChunks = [];
-        mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
-        mediaRecorder.onstop = () => {
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        mediaRecorder.onstop = async () => {
             stream.getTracks().forEach(t => t.stop());
             const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
-            enviarAudio(blob);
+            await enviarAudio(blob);
         };
         mediaRecorder.start();
         isRecording = true;
-        setGrabarUI(true);
+        document.getElementById('btnGrabarText').textContent = 'Detener';
+        document.getElementById('btnGrabar').classList.replace('btn-primary', 'btn-danger');
+        document.getElementById('recordingStatus').classList.remove('d-none');
+        document.getElementById('vozAviso').classList.add('d-none');
     } catch (err) {
-        mostrarAviso('danger', 'No se pudo acceder al micrófono: ' + err.message);
+        mostrarAviso('No se pudo acceder al micrófono: ' + err.message, 'danger');
     }
 }
 
 function stopRecording() {
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-    isRecording = false;
-    setGrabarUI(false);
-}
-
-function setGrabarUI(grabando) {
-    const btn = document.getElementById('btnGrabar');
-    const txt = document.getElementById('btnGrabarText');
-    const status = document.getElementById('recordingStatus');
-    if (grabando) {
-        txt.textContent = 'Detener grabación';
-        btn.classList.replace('btn-primary', 'btn-danger');
-        status.classList.remove('d-none');
-    } else {
-        txt.textContent = 'Grabar pedido';
-        btn.classList.replace('btn-danger', 'btn-primary');
-        status.classList.add('d-none');
+    if (mediaRecorder && isRecording) {
+        mediaRecorder.stop();
+        isRecording = false;
+        document.getElementById('btnGrabarText').textContent = 'Grabar pedido';
+        document.getElementById('btnGrabar').classList.replace('btn-danger', 'btn-primary');
+        document.getElementById('recordingStatus').classList.add('d-none');
+        document.getElementById('vozProcesando').classList.remove('d-none');
     }
 }
 
-function mostrarAviso(tipo, html) {
-    const div = document.getElementById('vozAviso');
-    div.className = 'mt-2 alert alert-' + tipo + ' py-2 mb-0';
-    div.style.fontSize = '0.8rem';
-    div.innerHTML = html;
-    div.classList.remove('d-none');
+function mostrarAviso(msg, tipo) {
+    const el = document.getElementById('vozAviso');
+    el.className = `mt-2 alert alert-${tipo} py-2 mb-0`;
+    el.style.fontSize = '0.8rem';
+    el.textContent = msg;
+    el.classList.remove('d-none');
 }
 
 async function enviarAudio(blob) {
-    const proc = document.getElementById('vozProcesando');
-    const btn = document.getElementById('btnGrabar');
-    proc.classList.remove('d-none');
-    btn.disabled = true;
-    document.getElementById('vozAviso').classList.add('d-none');
+    const fd = new FormData();
+    fd.append('audio', blob, 'pedido.webm');
+    const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value;
 
     try {
-        const ext = (blob.type.split('/')[1] || 'webm').split(';')[0];
-        const fd = new FormData();
-        fd.append('audio', blob, 'pedido.' + ext);
-        const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value;
-
         const resp = await fetch('@Url.Action("InterpretarVoz", "Ventas")', {
             method: 'POST',
             headers: token ? { 'RequestVerificationToken': token } : {},
             body: fd
         });
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
         const data = await resp.json();
+        document.getElementById('vozProcesando').classList.add('d-none');
 
-        if (data.error) { mostrarAviso('warning', data.error); return; }
+        if (data.error) {
+            mostrarAviso(data.error, 'warning');
+            return;
+        }
 
         (data.items || []).forEach(it => {
             const existing = items.findIndex(i => i.productId === it.productoId);
@@ -284,17 +104,14 @@ async function enviarAudio(blob) {
         });
         renderItems();
 
-        let aviso = '<i class="bi bi-check-circle me-1"></i><strong>Reconocido:</strong> ' +
-                    (data.transcripcion || '');
-        if ((data.noEncontrados || []).length > 0)
-            aviso += '<br><i class="bi bi-exclamation-triangle me-1"></i>No encontrados en el catálogo: ' +
-                     data.noEncontrados.join(', ');
-        mostrarAviso((data.items || []).length > 0 ? 'success' : 'warning', aviso);
+        let msg = data.transcripcion ? `Escuché: "${data.transcripcion}"` : 'Pedido cargado.';
+        if ((data.noEncontrados || []).length > 0) {
+            msg += ' No encontré: ' + data.noEncontrados.join(', ') + '.';
+        }
+        mostrarAviso(msg, (data.noEncontrados || []).length > 0 ? 'warning' : 'success');
     } catch (err) {
-        mostrarAviso('danger', 'Error procesando el audio: ' + err.message);
-    } finally {
-        proc.classList.add('d-none');
-        btn.disabled = false;
+        document.getElementById('vozProcesando').classList.add('d-none');
+        mostrarAviso('Error procesando el audio: ' + err.message, 'danger');
     }
 }
 </script>

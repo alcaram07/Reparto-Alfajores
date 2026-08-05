@@ -102,6 +102,96 @@ public class VentaService : IVentaService
         return venta;
     }
 
+    public async Task<bool> UpdateAsync(VentaViewModel vm)
+    {
+        if (vm.Detalles == null || vm.Detalles.Count == 0)
+            throw new NegocioException("La venta debe tener al menos un producto.");
+
+        var strategy = _db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await _db.Database.BeginTransactionAsync();
+
+            var venta = await _db.Ventas
+                .Include(v => v.Detalles)
+                .FirstOrDefaultAsync(v => v.Id == vm.Id);
+
+            if (venta == null) return false;
+
+            if (vm.ClienteId != venta.ClienteId)
+                throw new NegocioException(
+                    "No se puede cambiar el cliente de una venta. Eliminala y cargala de nuevo.");
+
+            await _cuentaCorriente.BloquearClienteAsync(venta.ClienteId);
+
+            var eraCuentaCorriente = venta.EstadoCobro == EstadoCobro.CuentaCorriente;
+
+            // Precio congelado: las líneas que ya estaban conservan el suyo; sólo las nuevas
+            // toman el precio actual del catálogo.
+            var preciosPrevios = venta.Detalles
+                .GroupBy(d => d.ProductoId)
+                .ToDictionary(g => g.Key, g => g.First().PrecioUnitario);
+
+            _db.DetalleVentas.RemoveRange(venta.Detalles);
+            venta.Detalles.Clear();
+
+            foreach (var d in vm.Detalles)
+            {
+                if (!preciosPrevios.TryGetValue(d.ProductoId, out var precio))
+                {
+                    var producto = await _db.Productos.FindAsync(d.ProductoId)
+                        ?? throw new NegocioException($"Producto {d.ProductoId} no encontrado");
+                    precio = producto.PrecioUnitario;
+                }
+
+                venta.Detalles.Add(new DetalleVenta
+                {
+                    VentaId = venta.Id,
+                    ProductoId = d.ProductoId,
+                    Cantidad = d.Cantidad,
+                    PrecioUnitario = precio
+                });
+            }
+
+            venta.Total = venta.Detalles.Sum(d => d.Cantidad * d.PrecioUnitario);
+            venta.MetodoPago = vm.MetodoPago;
+            venta.EstadoCobro = vm.MetodoPago == MetodoPago.CuentaCorriente
+                ? EstadoCobro.CuentaCorriente
+                : EstadoCobro.Cobrado;
+            venta.Nota = vm.Nota?.Trim();
+
+            var esCuentaCorriente = venta.EstadoCobro == EstadoCobro.CuentaCorriente;
+            var movimiento = await _db.MovimientosCC.FirstOrDefaultAsync(m => m.VentaId == venta.Id);
+
+            if (esCuentaCorriente && movimiento != null)
+            {
+                // Se actualiza el registro existente en vez de borrarlo y recrearlo:
+                // RecalcularSaldosAsync ordena por Id, así que conservarlo mantiene el cargo
+                // en su lugar cronológico dentro del libro mayor.
+                movimiento.Monto = venta.Total;
+            }
+            else if (!esCuentaCorriente && movimiento != null)
+            {
+                _db.MovimientosCC.Remove(movimiento);
+            }
+
+            await _db.SaveChangesAsync();
+
+            if (esCuentaCorriente && movimiento == null)
+            {
+                await _cuentaCorriente.RegistrarMovimientoAsync(
+                    venta.ClienteId, TipoMovimientoCC.Cargo, venta.Total,
+                    $"Venta #{venta.Id}", venta.Fecha, ventaId: venta.Id);
+            }
+
+            if (esCuentaCorriente || eraCuentaCorriente)
+                await _cuentaCorriente.RecalcularSaldosAsync(venta.ClienteId);
+
+            await tx.CommitAsync();
+            return true;
+        });
+    }
+
     public async Task<bool> DeleteAsync(int id)
     {
         var strategy = _db.Database.CreateExecutionStrategy();

@@ -1,0 +1,132 @@
+@model VentaViewModel
+@{
+    // "Nuevo" o "Editar". La carga por voz no se incluye acá: sólo tiene sentido al crear,
+    // porque acumula ítems sobre los que ya están cargados.
+    var accion = (string)(ViewData["Accion"] ?? "Nuevo");
+    var esEdicion = accion == "Editar";
+    var textoBoton = esEdicion ? "Guardar cambios" : "Confirmar venta";
+}
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-body">
+                <form asp-action="@accion" method="post" id="ventaForm">
+                    @Html.AntiForgeryToken()
+                    <input asp-for="Id" type="hidden" />
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 mb-3" style="font-size:0.85rem"></div>
+
+                    <!-- Paso 1: Cliente -->
+                    <div class="mb-4">
+                        <h6 class="fw-bold mb-2" style="color:var(--color-primary)">1. Seleccionar cliente</h6>
+                        @if (esEdicion)
+                        {
+                            @* El cliente no se puede cambiar: mover el cargo de un libro mayor a otro
+                               obliga a recalcular dos cuentas a la vez. Si está mal, se elimina y se recarga. *@
+                            <select asp-for="ClienteId" asp-items="Model.Clientes" class="form-select" disabled></select>
+                            <input asp-for="ClienteId" type="hidden" />
+                            <div class="text-muted mt-1" style="font-size:0.8rem">
+                                <i class="bi bi-info-circle me-1"></i>Para cambiar el cliente, eliminá la venta y cargala de nuevo.
+                            </div>
+                        }
+                        else
+                        {
+                            <select asp-for="ClienteId" asp-items="Model.Clientes" class="form-select" id="clienteSelect">
+                                <option value="0">-- Seleccioná un cliente --</option>
+                            </select>
+                        }
+                        <span asp-validation-for="ClienteId" class="text-danger" style="font-size:0.8rem"></span>
+                    </div>
+
+                    @if (!esEdicion)
+                    {
+                        @* Sólo al crear: enviarAudio() acumula ítems sobre los que ya están en la
+                           lista, así que sobre una venta cargada sería una fuente de errores.
+                           El JS que maneja la grabación vive en Nuevo.cshtml. *@
+                        <div class="mb-4 p-3 rounded" style="background:var(--color-primary-light)">
+                            <h6 class="fw-bold mb-2" style="color:var(--color-primary-dark)">
+                                <i class="bi bi-magic me-1"></i>Cargar por voz
+                            </h6>
+                            <p class="mb-2" style="font-size:0.8rem;color:var(--color-primary-dark)">
+                                Tocá el micrófono y dictá el pedido. Ej: "tres alfajores de maicena y dos de chocolate".
+                            </p>
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <button type="button" id="btnGrabar" onclick="toggleRecording()" class="btn btn-primary">
+                                    <i class="bi bi-mic-fill me-1"></i><span id="btnGrabarText">Grabar pedido</span>
+                                </button>
+                                <span id="recordingStatus" class="fw-semibold text-danger d-none" style="font-size:0.85rem">
+                                    <span class="recording-dot me-1">●</span>Grabando… tocá Detener al terminar
+                                </span>
+                                <span id="vozProcesando" class="text-muted d-none" style="font-size:0.85rem">
+                                    <span class="spinner-border spinner-border-sm me-1"></span>Procesando audio…
+                                </span>
+                            </div>
+                            <div id="vozAviso" class="mt-2 d-none" style="font-size:0.8rem"></div>
+                        </div>
+                    }
+
+                    <!-- Paso 2: Productos -->
+                    <div class="mb-4">
+                        <h6 class="fw-bold mb-2" style="color:var(--color-primary)">2. Agregar productos</h6>
+                        <div class="d-flex gap-2 mb-2">
+                            <select id="productoSelect" class="form-select">
+                                <option value="">-- Producto --</option>
+                                @foreach (var p in Model.Productos)
+                                {
+                                    <option value="@p.Value">@p.Text</option>
+                                }
+                            </select>
+                            <input type="number" id="cantidadInput" class="form-control" style="max-width:90px" min="1" value="1" />
+                            <button type="button" class="btn btn-outline-primary" onclick="agregarProducto()">
+                                <i class="bi bi-plus"></i>
+                            </button>
+                        </div>
+                        <div id="detallesHidden"></div>
+                        @if (ViewData.ModelState.ContainsKey("Detalles") && ViewData.ModelState["Detalles"]!.Errors.Any())
+                        {
+                            <div class="text-danger" style="font-size:0.8rem">Agregue al menos un producto</div>
+                        }
+                    </div>
+
+                    <!-- Paso 3: Método de pago -->
+                    <div class="mb-4">
+                        <h6 class="fw-bold mb-2" style="color:var(--color-primary)">3. Forma de cobro</h6>
+                        <div class="d-flex gap-2 flex-wrap">
+                            @foreach (MetodoPago mp in Enum.GetValues(typeof(MetodoPago)))
+                            {
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="MetodoPago"
+                                           id="mp_@mp" value="@((int)mp)"
+                                           @(mp == Model.MetodoPago ? "checked" : "") />
+                                    <label class="form-check-label" for="mp_@mp">@mp</label>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label">Nota (opcional)</label>
+                        <input asp-for="Nota" class="form-control" placeholder="Observaciones..." />
+                    </div>
+
+                    <!-- Total -->
+                    <div class="d-flex justify-content-between align-items-center p-3 mb-3 rounded" style="background:var(--color-primary-light)">
+                        <span class="fw-bold" style="color:var(--color-primary-dark)">Total</span>
+                        <span class="fw-bold fs-4" style="color:var(--color-primary)" id="totalDisplay">$0,00</span>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 btn-lg">
+                        <i class="bi bi-check-circle me-1"></i> @textoBoton
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header">Resumen de ítems</div>
+            <div class="card-body p-0" id="resumenContainer"></div>
+        </div>
+    </div>
+</div>
