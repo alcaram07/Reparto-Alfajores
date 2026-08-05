@@ -128,5 +128,16 @@ Reglas que hay que respetar al tocar este código:
 ## Deploy
 
 - **Render** con Docker. Puerto interno: 10000 (`ASPNETCORE_URLS=http://+:10000`).
+- Para verificar qué build está corriendo sin entrar al dashboard:
+
+  ```bash
+  curl -s https://reparto-alfajores.onrender.com/health
+  # {"status":"ok","commit":"9b6d82b","rama":"master"}
+  ```
+
+  El commit sale de `RENDER_GIT_COMMIT` (la inyecta Render). Fuera de Render cae al SHA que
+  SourceLink embebe en el ensamblado al compilar; si tampoco está, informa `"desconocido"`.
+- El Dockerfile publica `RepartoAlfajores.csproj` **por nombre**: el `WORKDIR` también tiene la
+  `.sln`, que referencia el proyecto de tests y no se copia a la imagen.
 - Variables de entorno en Render: `DATABASE_URL` (postgres://...), `AUTH_PASSWORD_HASH`, `GROQ_API_KEY`, `NOMBRE_NEGOCIO`.
 - `Program.cs` parsea `DATABASE_URL` en formato URI automáticamente.

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using RepartoAlfajores.Data;
 using RepartoAlfajores.Services.Implementations;
 using RepartoAlfajores.Services.Interfaces;
+using RepartoAlfajores.Utils;
 
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
@@ -123,7 +124,14 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/health", () => Results.Ok("ok"));
+// Devuelve el commit desplegado para poder verificar un deploy con un curl,
+// sin depender del dashboard de Render.
+app.MapGet("/health", () => Results.Ok(new
+{
+    status = "ok",
+    commit = VersionInfo.Commit,
+    rama = VersionInfo.Rama
+}));
 
 app.MapControllerRoute(
     name: "default",
