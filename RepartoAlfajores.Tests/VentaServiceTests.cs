@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RepartoAlfajores.Models;
+using RepartoAlfajores.Services;
 using RepartoAlfajores.Services.Interfaces;
 using RepartoAlfajores.ViewModels;
 
@@ -101,7 +102,7 @@ public class VentaServiceTests : DbTestBase
             ]
         };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateAsync(vm));
+        await Assert.ThrowsAsync<NegocioException>(() => service.CreateAsync(vm));
 
         await using var verificacion = Fixture.CreateContext();
         Assert.False(await verificacion.Ventas.AnyAsync());

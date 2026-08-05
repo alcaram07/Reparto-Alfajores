@@ -63,7 +63,7 @@ public class VentaService : IVentaService
         foreach (var d in vm.Detalles)
         {
             var producto = await _db.Productos.FindAsync(d.ProductoId)
-                ?? throw new InvalidOperationException($"Producto {d.ProductoId} no encontrado");
+                ?? throw new NegocioException($"Producto {d.ProductoId} no encontrado");
 
             venta.Detalles.Add(new DetalleVenta
             {

@@ -32,10 +32,10 @@ public class CobroService : ICobroService
     {
         var clienteExiste = await _db.Clientes.AnyAsync(c => c.Id == vm.ClienteId);
         if (!clienteExiste)
-            throw new InvalidOperationException("El cliente indicado no existe.");
+            throw new NegocioException("El cliente indicado no existe.");
 
         if (vm.Monto <= 0)
-            throw new InvalidOperationException("El monto del cobro debe ser mayor a cero.");
+            throw new NegocioException("El monto del cobro debe ser mayor a cero.");
 
         var cobro = new Cobro
         {

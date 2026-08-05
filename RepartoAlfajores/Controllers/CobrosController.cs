@@ -53,15 +53,8 @@ public class CobrosController : Controller
             TempData["Error"] = "Datos del cobro inválidos";
             return RedirectToAction(nameof(Index));
         }
-        try
-        {
-            await _cobroService.CreateAsync(vm);
-        }
-        catch (InvalidOperationException ex)
-        {
-            TempData["Error"] = ex.Message;
-            return RedirectToAction(nameof(Index));
-        }
+        // Las NegocioException las traduce ManejadorDeErroresFilter; acá no hace falta try/catch.
+        await _cobroService.CreateAsync(vm);
 
         // Un pago mayor a la deuda deja saldo negativo: se avisa para que no parezca un error.
         var saldo = await _cuentaCorriente.GetSaldoAsync(vm.ClienteId);

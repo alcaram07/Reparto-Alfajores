@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RepartoAlfajores.Models;
+using RepartoAlfajores.Services;
 using RepartoAlfajores.Services.Interfaces;
 using RepartoAlfajores.ViewModels;
 
@@ -110,7 +111,7 @@ public class CobroServiceTests : DbTestBase
     {
         await using var db = Fixture.CreateContext();
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+        var ex = await Assert.ThrowsAsync<NegocioException>(
             () => NuevoCobro(db).CreateAsync(NuevoCobroVm(100m, clienteId: 999_999)));
 
         Assert.Contains("no existe", ex.Message, StringComparison.OrdinalIgnoreCase);
@@ -123,7 +124,7 @@ public class CobroServiceTests : DbTestBase
     {
         await using var db = Fixture.CreateContext();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<NegocioException>(
             () => NuevoCobro(db).CreateAsync(NuevoCobroVm(monto)));
 
         await using var verificacion = Fixture.CreateContext();

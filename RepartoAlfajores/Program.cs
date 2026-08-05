@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RepartoAlfajores.Data;
+using RepartoAlfajores.Filters;
 using RepartoAlfajores.Services.Implementations;
 using RepartoAlfajores.Services.Interfaces;
 
@@ -52,6 +53,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 builder.Services.AddControllersWithViews(options =>
 {
     options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());
+    // Convierte las NegocioException en un mensaje en pantalla en vez de un error 500.
+    options.Filters.Add<ManejadorDeErroresFilter>();
 });
 
 builder.Services.AddScoped<IZonaService, ZonaService>();
@@ -116,6 +119,9 @@ else
     app.UseExceptionHandler("/Home/Error");
     app.UseHsts();
 }
+
+// Sin esto, un NotFound() de un controller devuelve una página en blanco.
+app.UseStatusCodePagesWithReExecute("/Home/Error", "?code={0}");
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();

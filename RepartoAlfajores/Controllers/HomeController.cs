@@ -20,5 +20,13 @@ public class HomeController : Controller
         return View(vm);
     }
 
-    public IActionResult Error() => View();
+    // Sin AllowAnonymous, el [Authorize] de la clase redirige al login en vez de mostrar
+    // el error — justo cuando algo falló y el usuario necesita entender qué pasó.
+    [AllowAnonymous]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public IActionResult Error(int? code = null)
+    {
+        ViewBag.Codigo = code;
+        return View();
+    }
 }
