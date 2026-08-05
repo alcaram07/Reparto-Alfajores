@@ -32,13 +32,13 @@ public class ClienteService : IClienteService
 
         if (estadoDeuda == "conDeuda" || estadoDeuda == "sinDeuda")
         {
-            var saldos = new Dictionary<int, decimal>();
-            foreach (var c in clientes)
-                saldos[c.Id] = await GetSaldoPendienteAsync(c.Id);
+            // Una sola consulta para todos: antes se pedía el saldo cliente por cliente dentro
+            // del bucle, o sea una ida y vuelta a la base por cada uno.
+            var saldos = await _cuentaCorriente.GetSaldosAsync();
 
             clientes = estadoDeuda == "conDeuda"
-                ? clientes.Where(c => saldos[c.Id] > 0).ToList()
-                : clientes.Where(c => saldos[c.Id] <= 0).ToList();
+                ? clientes.Where(c => saldos.GetValueOrDefault(c.Id) > 0).ToList()
+                : clientes.Where(c => saldos.GetValueOrDefault(c.Id) <= 0).ToList();
         }
 
         return clientes;
@@ -110,19 +110,18 @@ public class ClienteService : IClienteService
 
     public async Task<IEnumerable<SelectListItem>> GetSelectListConDeudaAsync()
     {
+        var saldos = await _cuentaCorriente.GetSaldosAsync();
+        var deudores = saldos.Where(s => s.Value > 0).Select(s => s.Key).ToList();
+
+        if (deudores.Count == 0) return [];
+
         var clientes = await _db.Clientes
-            .Include(c => c.Zona)
-            .Where(c => c.Activo)
+            .Where(c => c.Activo && deudores.Contains(c.Id))
             .OrderBy(c => c.Nombre)
+            .Select(c => new { c.Id, c.Nombre })
             .ToListAsync();
 
-        var result = new List<SelectListItem>();
-        foreach (var c in clientes)
-        {
-            var saldo = await GetSaldoPendienteAsync(c.Id);
-            if (saldo > 0)
-                result.Add(new SelectListItem($"{c.Nombre} (debe ${saldo:N2})", c.Id.ToString()));
-        }
-        return result;
+        return clientes.Select(c => new SelectListItem(
+            $"{c.Nombre} (debe ${saldos[c.Id]:N2})", c.Id.ToString()));
     }
 }

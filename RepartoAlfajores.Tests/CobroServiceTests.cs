@@ -106,6 +106,41 @@ public class CobroServiceTests : DbTestBase
         Assert.Equal("Centro", deudor.Zona);
     }
 
+    /// <summary>
+    /// El caso que motivó el arreglo: un cliente que compra a cuenta desde hace mucho pero paga
+    /// puntual aparecía con cientos de días de mora y encabezaba la lista de deudores.
+    /// </summary>
+    [Fact]
+    public async Task Los_dias_de_deuda_no_cuentan_las_deudas_ya_saldadas()
+    {
+        await using var db = Fixture.CreateContext();
+        var cc = NuevoCuentaCorriente(db);
+
+        await cc.RegistrarMovimientoAsync(Datos.ClienteId, TipoMovimientoCC.Cargo, 1000m, "V1", DateTime.UtcNow.AddDays(-200));
+        await cc.RegistrarMovimientoAsync(Datos.ClienteId, TipoMovimientoCC.Abono, 1000m, "C1", DateTime.UtcNow.AddDays(-190));
+        await cc.RegistrarMovimientoAsync(Datos.ClienteId, TipoMovimientoCC.Cargo, 400m, "V2", DateTime.UtcNow.AddDays(-3));
+
+        var deudor = Assert.Single(await NuevoCobro(db).GetDeudoresAsync());
+
+        Assert.Equal(400m, deudor.Saldo);
+        Assert.InRange(deudor.DiasDeuda, 2, 4); // no 200
+    }
+
+    [Fact]
+    public async Task El_deudor_mas_antiguo_encabeza_la_lista()
+    {
+        await using var db = Fixture.CreateContext();
+        var cc = NuevoCuentaCorriente(db);
+
+        await cc.RegistrarMovimientoAsync(Datos.ClienteId, TipoMovimientoCC.Cargo, 500m, "V1", DateTime.UtcNow.AddDays(-2));
+        await cc.RegistrarMovimientoAsync(Datos.ClienteId2, TipoMovimientoCC.Cargo, 300m, "V2", DateTime.UtcNow.AddDays(-45));
+
+        var deudores = (await NuevoCobro(db).GetDeudoresAsync()).ToList();
+
+        Assert.Equal(Datos.ClienteId2, deudores[0].ClienteId);
+        Assert.InRange(deudores[0].DiasDeuda, 44, 46);
+    }
+
     [Fact]
     public async Task Cobrar_a_un_cliente_inexistente_falla_con_mensaje_claro()
     {
@@ -239,6 +274,10 @@ public class CobroServiceTests : DbTestBase
         : ICuentaCorrienteService
     {
         public Task<decimal> GetSaldoAsync(int clienteId) => inner.GetSaldoAsync(clienteId);
+
+        public Task<Dictionary<int, decimal>> GetSaldosAsync() => inner.GetSaldosAsync();
+
+        public Task<Dictionary<int, DateTime>> GetInicioDeudaAsync() => inner.GetInicioDeudaAsync();
 
         public Task BloquearClienteAsync(int clienteId) => inner.BloquearClienteAsync(clienteId);
 
