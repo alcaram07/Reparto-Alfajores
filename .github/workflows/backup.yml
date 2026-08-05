@@ -13,7 +13,10 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
-      - name: Instalar pg_dump 17
+      # pg_dump se niega a volcar una base de versión mayor que él, así que este número
+      # tiene que ir a la par del motor de Neon (hoy 18.x). Si Neon actualiza, el workflow
+      # falla con "no coincide la versión del servidor" y hay que subirlo acá.
+      - name: Instalar pg_dump 18
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
           sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
@@ -22,7 +25,7 @@ jobs:
             https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
             | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           sudo apt-get update
-          sudo apt-get install -y postgresql-client-17
+          sudo apt-get install -y postgresql-client-18
 
       - name: Generar el dump
         env:
